@@ -37,8 +37,6 @@ pub fn apply_placeholders(s: String, args: &HashMap<String, String>) -> Result<S
         v
     };
 
-    println!("matches: {:?}", matches);
-
     // Make s mutable so we can change it in place
     let mut s = s;
 
@@ -53,8 +51,6 @@ pub fn apply_placeholders(s: String, args: &HashMap<String, String>) -> Result<S
         // Replace it in the template
         s.replace_range(start..end, arg);
     }
-
-    print!("{}", s);
 
     Ok(s)
 }

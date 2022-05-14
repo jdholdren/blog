@@ -1,10 +1,14 @@
 {
 	"index.html": {
-		"template": "./static/landing.html",
+		"file": "./static/landing.html",
 		"parameters": {
 			"name": "James",
 			"copyright": "2022",
 			"language": "Rust"
 		}
+	},
+	"static/main.css": {
+		"file": "./static/css/main.css",
+		"skip_templating": true
 	}
 }

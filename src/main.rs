@@ -11,12 +11,6 @@ mod templating;
 #[derive(Debug)]
 pub struct ErrMsg(String);
 
-impl ErrMsg {
-    fn from_str(s: &str) -> Self {
-        ErrMsg(s.to_owned())
-    }
-}
-
 impl From<std::io::Error> for ErrMsg {
     fn from(std_err: std::io::Error) -> Self {
         ErrMsg(std_err.to_string())
@@ -26,12 +20,11 @@ impl From<std::io::Error> for ErrMsg {
 // This generates the blog 'index.html's from the location and manifest
 fn main() {
     let manifest = get_manifest();
-    println!("Decoded manifest {:?}", manifest);
-
     for (name, args) in manifest.inner {
-        if let Err(err) = gen_index(&name, &args) {
-            panic!("unable to generate index.html for {}: {}", &name, err.0);
-        }
+        let file_path =
+            gen_index(&name, &args).expect(&format!("unable to generate file for {}", &name));
+
+        println!("generated file: {}", file_path);
     }
 }
 
@@ -43,7 +36,10 @@ struct Manifest {
 
 #[derive(Deserialize, Debug)]
 struct TemplateArgs {
-    template: String,
+    file: String,
+    #[serde(default)]
+    skip_templating: bool,
+    #[serde(default)]
     parameters: HashMap<String, String>,
 }
 
@@ -59,17 +55,31 @@ fn get_manifest() -> Manifest {
 }
 
 // Generates an index from the given name and args
-fn gen_index(name: &String, args: &TemplateArgs) -> Result<(), ErrMsg> {
+fn gen_index(name: &String, args: &TemplateArgs) -> Result<String, ErrMsg> {
     // Read in the template file
     let mut data = String::new();
-    let mut f = File::open(&args.template)?;
+    let mut f = File::open(&args.file)?;
     f.read_to_string(&mut data)?;
 
-    // Replace all placeholders
-    let s = templating::apply_placeholders(data, &args.parameters)?;
+    // Replace all placeholders, if not skipping
+    let s = if !args.skip_templating {
+        templating::apply_placeholders(data, &args.parameters)?
+    } else {
+        data
+    };
 
     // Save off the file
-    fs::write(format!("./generated/{}", name), s)?;
 
-    Ok(())
+    let file_name = format!("./generated/{}", name);
+    let path = std::path::Path::new(&file_name);
+    let prefix = match path.parent() {
+        None => return Err(ErrMsg("could not get parent path".to_owned())),
+        Some(v) => v,
+    };
+
+    // Create the directory as needed
+    fs::create_dir_all(prefix)?;
+    fs::write(&file_name, s)?;
+
+    Ok(file_name.to_owned())
 }
