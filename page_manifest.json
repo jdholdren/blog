@@ -1,0 +1,10 @@
+{
+	"index.html": {
+		"template": "./static/landing.html",
+		"parameters": {
+			"name": "James",
+			"copyright": "2022",
+			"language": "Rust"
+		}
+	}
+}
