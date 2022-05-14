@@ -1,14 +1,16 @@
 {
-	"index.html": {
-		"file": "./static/landing.html",
-		"parameters": {
-			"name": "James",
-			"copyright": "2022",
-			"language": "Rust"
+	"pages": {
+		"index.html": {
+			"file": "./static/landing.html",
+			"parameters": {
+				"name": "James",
+				"copyright": "2022",
+				"language": "Rust"
+			}
+		},
+		"static/main.css": {
+			"file": "./static/css/main.css",
+			"skip_templating": true
 		}
-	},
-	"static/main.css": {
-		"file": "./static/css/main.css",
-		"skip_templating": true
 	}
 }

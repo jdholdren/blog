@@ -20,9 +20,9 @@ impl From<std::io::Error> for ErrMsg {
 // This generates the blog 'index.html's from the location and manifest
 fn main() {
     let manifest = get_manifest();
-    for (name, args) in manifest.inner {
+    for (name, args) in manifest.pages {
         let file_path =
-            gen_index(&name, &args).expect(&format!("unable to generate file for {}", &name));
+            gen_page(&name, &args).expect(&format!("unable to generate file for {}", &name));
 
         println!("generated file: {}", file_path);
     }
@@ -30,8 +30,7 @@ fn main() {
 
 #[derive(Deserialize, Debug)]
 struct Manifest {
-    #[serde(flatten)]
-    inner: HashMap<String, TemplateArgs>,
+    pages: HashMap<String, TemplateArgs>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -54,8 +53,8 @@ fn get_manifest() -> Manifest {
     serde_json::from_str(&data).expect("Unable to decode json")
 }
 
-// Generates an index from the given name and args
-fn gen_index(name: &String, args: &TemplateArgs) -> Result<String, ErrMsg> {
+// Generates an file from the given path name and args
+fn gen_page(name: &String, args: &TemplateArgs) -> Result<String, ErrMsg> {
     // Read in the template file
     let mut data = String::new();
     let mut f = File::open(&args.file)?;
