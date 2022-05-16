@@ -2,7 +2,7 @@
 
 html, body {
 	margin: 0px;
-	font-family: 'Open Sans', sans-serif;
+	font-family: 'Roboto', sans-serif;
 
 	--main-text-color: #323232;
 	--green: #588157;
@@ -17,6 +17,7 @@ ul {
 	list-style-type: none;
 	margin: 0px;
 	padding: 0px;
+	width: auto;
 }
 
 a, a:hover, a:visited {
@@ -58,12 +59,10 @@ a, a:hover, a:visited {
 }
 
 .gutter-right {
-	padding-right: 300px;
 }
 
 @media screen and (max-width: 1280px) {
 	.gutter-right {
-		padding-right: 64px;
 	}
 }
 
@@ -98,4 +97,8 @@ a, a:hover, a:visited {
 
 .text-bold {
 	font-family: 'Montserrat', sans-serif;
+}
+
+.text-center {
+	text-align: center;
 }
