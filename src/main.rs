@@ -77,7 +77,10 @@ fn get_reusables() -> Fallable<HashMap<String, String>> {
         let filename = &file.to_str().unwrap();
         println!("reading in reusable: {}", &filename);
 
-        let contents = read_file(&filename)?;
+        let contents = match read_file(&filename) {
+            Err(_) => continue,
+            Ok(contents) => contents,
+        };
 
         m.insert(
             file.file_name().unwrap().to_str().unwrap().to_owned(),

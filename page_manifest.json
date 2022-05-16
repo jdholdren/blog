@@ -11,6 +11,10 @@
 		"static/main.css": {
 			"file": "./static/css/main.css",
 			"skip_templating": true
+		},
+		"404.html": {
+			"file": "./static/404.html",
+			"skip_templating": true
 		}
 	}
 }

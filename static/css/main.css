@@ -5,8 +5,8 @@ html, body {
 	font-family: 'Open Sans', sans-serif;
 
 	--main-text-color: #323232;
-	--green: #3e7f42;
-	--green-dark: #4a6741;
+	--green: #588157;
+	--green-dark: #3A5A40;
 
 	color: var(--main-text-color);
 
@@ -16,6 +16,7 @@ html, body {
 ul {
 	list-style-type: none;
 	margin: 0px;
+	padding: 0px;
 }
 
 a, a:hover, a:visited {
@@ -50,8 +51,20 @@ a, a:hover, a:visited {
 	padding-left: 320px;
 }
 
+@media screen and (max-width: 1280px) {
+	.gutter-left {
+		padding-left: 64px;
+	}
+}
+
 .gutter-right {
-	padding-right: 320px;
+	padding-right: 300px;
+}
+
+@media screen and (max-width: 1280px) {
+	.gutter-right {
+		padding-right: 64px;
+	}
 }
 
 .height-64 {
@@ -69,11 +82,20 @@ a, a:hover, a:visited {
 }
 
 .green-back {
-	background-color: var(--green-dark);
+	background-color: var(--green);
 }
 
 /* Text */
 
 .text-underlined {
 	text-decoration: underline;
+}
+
+.text-title {
+	font-size: 6em;
+	color: var(--green-dark);
+}
+
+.text-bold {
+	font-family: 'Montserrat', sans-serif;
 }
