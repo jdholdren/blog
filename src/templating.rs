@@ -21,7 +21,7 @@ pub fn apply_placeholders(
 ) -> Result<String, ErrMsg> {
     lazy_static! {
         // Matches `{{name}}` or `{{language2}}`
-        static ref RE: Regex = Regex::new(r"\{\{([a-zA-Z0-9:\.]+)\}\}").unwrap();
+        static ref RE: Regex = Regex::new(r"\{\{([a-zA-Z0-9: \.]+)\}\}").unwrap();
     }
 
     // Get all the placeholders into a vec so we can iterate backwards
@@ -31,6 +31,7 @@ pub fn apply_placeholders(
         let mut v = Vec::new();
 
         for mat in RE.find_iter(&s) {
+            println!("match: {}", mat.as_str());
             v.push((to_placeholder(mat.as_str()), (mat.start(), mat.end())));
         }
 
@@ -73,12 +74,18 @@ enum Placeholder {
 ///
 /// The enum representing the placeholder
 ///
+///
+/// When it's a standalone value
+///
 /// ```
 /// let s = dehandlebar("{{name}}");
 /// assert_eq!("name", s);
 /// ```
 fn to_placeholder(ph: &str) -> Placeholder {
-    let inner = ph.trim_start_matches("{{").trim_end_matches("}}");
+    let inner = ph
+        .trim_start_matches("{{")
+        .trim_end_matches("}}")
+        .replace(" ", "");
 
     if inner.starts_with("reusable:") {
         let template_name = inner.trim_start_matches("reusable:");
@@ -112,7 +119,6 @@ fn process_placeholder<'a>(
         };
     }
 
-    // TODO: Add other cases here
     Err(ErrMsg(format!(
         "can't process this type at this time: {:?}",
         ph
