@@ -1,130 +1,161 @@
-use std::collections::HashMap;
 use std::fs;
-use std::fs::File;
-use std::io::Read;
 
-use serde::Deserialize;
-
-mod templating;
-
-type Fallable<T> = Result<T, ErrMsg>;
+use rusqlite::params;
+use rusqlite::Connection;
 
 // Defining a custom error message
 #[derive(Debug)]
-pub struct ErrMsg(String);
+pub struct Error {
+    context: String,
+    inner_msg: String,
+}
 
-impl From<std::io::Error> for ErrMsg {
-    fn from(std_err: std::io::Error) -> Self {
-        ErrMsg(std_err.to_string())
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}: {}", self.context, self.inner_msg)
     }
 }
 
-// This generates the blog 'index.html's from the location and manifest
-fn main() {
-    let manifest = get_manifest().expect("error parsing manifest");
+impl std::error::Error for Error {}
 
-    // Parse all reusable pieces
-    let reusables = get_reusables().expect("unable to parse resuables");
+impl From<rusqlite::Error> for Error {
+    fn from(rusql_err: rusqlite::Error) -> Self {
+        Error {
+            context: String::new(),
+            inner_msg: rusql_err.to_string(),
+        }
+    }
+}
 
-    // Generate everything for the `pages` key
-    for (name, args) in manifest.pages {
-        // Load the page and then apply template processing
-        let file_contents = read_file(&args.file).expect("reading in file contents");
+impl From<std::io::Error> for Error {
+    fn from(io_err: std::io::Error) -> Self {
+        Error {
+            context: String::new(),
+            inner_msg: io_err.to_string(),
+        }
+    }
+}
 
-        let generated_file_path = gen_page(&name, file_contents, &args, &reusables)
-            .expect(&format!("unable to generate file for {}", &name));
+pub trait WithMessage<T> {
+    fn with_context(self, context: &str) -> Result<T, Error>;
+}
 
-        println!("generated file: {}", generated_file_path);
+impl<T, E: std::error::Error> WithMessage<T> for Result<T, E> {
+    fn with_context(self, msg: &str) -> Result<T, Error> {
+        match self {
+            Ok(val) => Ok(val), // Just pass it through
+            Err(err) => Err(Error {
+                context: msg.to_string(),
+                inner_msg: err.to_string(),
+            }),
+        }
+    }
+}
+
+fn main() -> Result<(), Error> {
+    // How I'm thinking about this going forward:
+    //
+    // I want to back this with a database for eventual search capability.
+    // But largely this should all be statically generated; there's no need to
+    // re-render the home page when nothing has changed.
+    //
+    // So first steps: parse files into a sqlite db, then start rendering pages
+    // using queries from said database.
+
+    // Build out the database
+    let conn = Connection::open("./db.sqlite").with_context("issue opening db")?;
+
+    // Crawl all static assets and insert them
+    insert_static_entries(&conn)?;
+
+    // Crawl all blogposts to insert into the db
+    insert_blogs(&conn)?;
+
+    Ok(())
+}
+
+// Inserts all static files into the db
+fn insert_static_entries(conn: &Connection) -> Result<(), Error> {
+    // Set up the table for reuseable assets
+    conn.execute(
+        "
+        CREATE TABLE static_assets (
+            id TEXT PRIMARY KEY,
+            data BLOB
+        );",
+        params![],
+    )?;
+
+    let files = walk_directory("./static").with_context("error walking static dir")?;
+
+    for file in files {
+        // Read in the file and insert it into the db
+        let contents =
+            fs::read_to_string(&file).with_context(&format!("issue reading file: {}", file))?;
+
+        conn.execute(
+            "INSERT INTO static_assets (id, data) VALUES (?1, ?2)",
+            params![&file, &contents],
+        )?;
     }
 
-    // TODO: Generate something using the blog template and data
+    Ok(())
 }
 
-#[derive(Deserialize, Debug)]
-struct Manifest {
-    pages: HashMap<String, TemplateArgs>,
-}
+fn insert_blogs(conn: &Connection) -> Result<(), Error> {
+    // Set up the table for blog posts
+    conn.execute(
+        "
+        CREATE TABLE blogposts (
+            id TEXT PRIMARY KEY,
+            html BLOB
+        );",
+        params![],
+    )?;
 
-#[derive(Deserialize, Debug)]
-struct TemplateArgs {
-    file: String,
-    #[serde(default)]
-    skip_templating: bool,
-    #[serde(default)]
-    parameters: HashMap<String, String>,
-}
+    for blog in walk_directory("./posts")? {
+        let markdown =
+            fs::read_to_string(&blog).with_context(&format!("error reading blog {}", blog))?;
+        let parser = pulldown_cmark::Parser::new_ext(&markdown, pulldown_cmark::Options::all());
 
-// This decodes the manifest into our struct
-fn get_manifest() -> Fallable<Manifest> {
-    // File reading
-    let mut data = String::new();
-    let mut f = File::open("./page_manifest.json")?;
-    f.read_to_string(&mut data)?;
+        // Insert it into the db
+        let mut html = String::new();
+        pulldown_cmark::html::push_html(&mut html, parser);
 
-    let manifest = serde_json::from_str(&data).expect("Unable to decode json");
-    Ok(manifest)
-}
-
-// Parses all files in the reusable directory and stores them in a map
-fn get_reusables() -> Fallable<HashMap<String, String>> {
-    let mut m = HashMap::<String, String>::new();
-    for file in fs::read_dir("./reusable")?
-        .into_iter()
-        .filter(|r| r.is_ok())
-        .map(|r| r.unwrap().path())
-        .filter(|entry| entry.is_file())
-    {
-        let filename = &file.to_str().unwrap();
-        println!("reading in reusable: {}", &filename);
-
-        let contents = match read_file(&filename) {
-            Err(_) => continue,
-            Ok(contents) => contents,
-        };
-
-        m.insert(
-            file.file_name().unwrap().to_str().unwrap().to_owned(),
-            contents,
-        );
+        conn.execute(
+            "
+             INSERT INTO blogposts (id, html) VALUES (?1, ?2);
+         ",
+            params![&blog, &html],
+        )
+        .with_context("issue inserting blog")?;
     }
 
-    Ok(m)
+    Ok(())
 }
 
-fn read_file(name: &str) -> Fallable<String> {
-    let mut data = String::new();
-    let mut f = File::open(name)?;
-    f.read_to_string(&mut data)?;
+// Produces all files within a directory
+fn walk_directory(dir: &str) -> Result<Vec<String>, Error> {
+    let mut files: Vec<String> = vec![];
 
-    Ok(data)
-}
+    for entry in fs::read_dir(dir).with_context("error reading dir")? {
+        let entry = entry?;
+        let path = entry.path().to_str().unwrap().to_string();
 
-// Generates an file from the given path name and args
-fn gen_page(
-    name: &str,
-    raw_text: String,
-    args: &TemplateArgs,
-    reusables: &HashMap<String, String>,
-) -> Fallable<String> {
-    // Replace all placeholders, if not skipping
-    let s = if !args.skip_templating {
-        templating::apply_placeholders(raw_text, &args.parameters, reusables)?
-    } else {
-        raw_text
-    };
+        // Skip directories
+        if entry.metadata()?.is_dir() {
+            // Delve into the directory
+            files.append(&mut walk_directory(&path)?);
+            continue;
+        }
 
-    // Save off the file
+        // Skip .swp files
+        if path.ends_with(".swp") {
+            continue;
+        }
 
-    let file_name = format!("./generated/{}", name);
-    let path = std::path::Path::new(&file_name);
-    let prefix = match path.parent() {
-        None => return Err(ErrMsg("could not get parent path".to_owned())),
-        Some(v) => v,
-    };
+        files.push(path);
+    }
 
-    // Create the directory as needed
-    fs::create_dir_all(prefix)?;
-    fs::write(&file_name, s)?;
-
-    Ok(file_name.to_owned())
+    Ok(files)
 }

@@ -1,3 +1,3 @@
 # Hello
 
-This is my initial blog post
+This is my initial blog post about things

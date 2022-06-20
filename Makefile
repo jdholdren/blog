@@ -3,6 +3,7 @@ run: clean
 
 clean:
 	rm -rf ./generated/*
+	rm -f db.sqlite
 
 browse:
 	open ./generated/index.html
