@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fs;
 
 use rusqlite::params;
@@ -8,6 +9,15 @@ use rusqlite::Connection;
 pub struct Error {
     context: String,
     inner_msg: String,
+}
+
+impl Error {
+    fn new(msg: &str) -> Error {
+        Error {
+            context: String::new(),
+            inner_msg: msg.to_string(),
+        }
+    }
 }
 
 impl std::fmt::Display for Error {
@@ -66,7 +76,7 @@ fn main() -> Result<(), Error> {
     let conn = Connection::open("./db.sqlite").with_context("issue opening db")?;
 
     // Crawl all static assets and insert them
-    insert_static_entries(&conn)?;
+    // insert_static_entries(&conn)?;
 
     // Crawl all blogposts to insert into the db
     insert_blogs(&conn)?;
@@ -106,8 +116,10 @@ fn insert_blogs(conn: &Connection) -> Result<(), Error> {
     // Set up the table for blog posts
     conn.execute(
         "
-        CREATE TABLE blogposts (
+        CREATE TABLE IF NOT EXISTS blogposts (
             id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            publish_date TEXT NOT NULL,
             html BLOB
         );",
         params![],
@@ -118,15 +130,18 @@ fn insert_blogs(conn: &Connection) -> Result<(), Error> {
             fs::read_to_string(&blog).with_context(&format!("error reading blog {}", blog))?;
         let parser = pulldown_cmark::Parser::new_ext(&markdown, pulldown_cmark::Options::all());
 
-        // Insert it into the db
-        let mut html = String::new();
-        pulldown_cmark::html::push_html(&mut html, parser);
+        let (front_matter, body_start) = parse_frontmatter(&blog)?;
+        let metadata = frontmatter_to_meta(&front_matter);
 
+        // Parse the
+        let mut html = String::new();
+
+        println!("{}", blog);
+
+        // Insert it into the db
         conn.execute(
-            "
-             INSERT INTO blogposts (id, html) VALUES (?1, ?2);
-         ",
-            params![&blog, &html],
+            "INSERT INTO blogposts (id, title, publish_date, html) VALUES (?1, ?2, ?3, ?4);",
+            params![&blog, metadata.title, metadata.publish_date, &html],
         )
         .with_context("issue inserting blog")?;
     }
@@ -158,4 +173,75 @@ fn walk_directory(dir: &str) -> Result<Vec<String>, Error> {
     }
 
     Ok(files)
+}
+
+type Frontmatter = HashMap<String, String>;
+
+// Parses a md file to get the front matter and the offset of the
+// real content
+fn parse_frontmatter(blog_file: &str) -> Result<(Frontmatter, u32), Error> {
+    let markdown = fs::read_to_string(&blog_file)
+        .with_context(&format!("error reading blog {}", blog_file))?;
+    let parser = pulldown_cmark::Parser::new_ext(&markdown, pulldown_cmark::Options::all());
+
+    let mut reading_frontmatter = false;
+    let mut fm = Frontmatter::new();
+    let content_start = 0;
+
+    'events: for event in parser {
+        if !reading_frontmatter {
+            match event {
+                pulldown_cmark::Event::Rule => {
+                    reading_frontmatter = true; // start parsing
+                    continue;
+                }
+                pulldown_cmark::Event::SoftBreak => {}
+                _ => {
+                    return Err(Error::new(&format!(
+                        "frontmatter not found for {}",
+                        blog_file
+                    )));
+                }
+            }
+        }
+
+        let data = match event {
+            pulldown_cmark::Event::Text(tag) => tag.to_string(), // Info
+            pulldown_cmark::Event::Rule => break 'events,        // End of the frontmatter
+            pulldown_cmark::Event::SoftBreak => continue,        // Ignored
+            pulldown_cmark::Event::HardBreak => continue,        // Ignored
+            pulldown_cmark::Event::Start(_) => continue,         // Ignored
+            pulldown_cmark::Event::End(_) => continue,           // Ignored
+            _ => {
+                // Unhandle-able
+                return Err(Error::new(&format!(
+                    "bad frontmatter for {}, found: {:?}",
+                    blog_file, event
+                )));
+            }
+        };
+
+        // The first delimeter is a ':', then everything after is the value
+        let mut split = data.split(":").collect::<Vec<&str>>();
+        let key = split[0].to_string();
+        split.remove(0);
+        let value = split.join("").trim().to_string();
+
+        // New we're good to insert into our fm
+        fm.insert(key, value);
+    }
+
+    Ok((fm, content_start))
+}
+
+struct Meta {
+    title: String,
+    publish_date: String,
+}
+
+fn frontmatter_to_meta(fm: &Frontmatter) -> Meta {
+    Meta {
+        title: fm.get("title").unwrap_or(&"".to_string()).to_string(),
+        publish_date: fm.get("publishDate").unwrap_or(&"".to_string()).to_string(),
+    }
 }
