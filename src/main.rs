@@ -51,6 +51,15 @@ impl From<std::io::Error> for Error {
     }
 }
 
+impl From<regex::Error> for Error {
+    fn from(re_err: regex::Error) -> Self {
+        Error {
+            context: String::new(),
+            inner_msg: re_err.to_string(),
+        }
+    }
+}
+
 pub trait WithMessage<T> {
     fn with_context(self, context: &str) -> Result<T, Error>;
 }
@@ -89,8 +98,11 @@ fn main() -> Result<(), Error> {
     // Crawl all blogposts to insert into the db
     insert_blogs(&repo)?;
 
+    // Make sure we have a folder to store the generated blog
+    fs::create_dir("./generated")?;
+
     // Pages to be generated
-    pages::generate_index(&repo)?;
+    pages::generate_archive(&repo)?;
 
     Ok(())
 }

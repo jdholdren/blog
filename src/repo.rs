@@ -1,8 +1,6 @@
 use crate::Error;
 use crate::WithMessage;
 
-use std::iter::Iterator;
-
 use rusqlite::params;
 use rusqlite::Connection;
 
@@ -55,7 +53,7 @@ impl<'a> Repo<'a> {
         Ok(())
     }
 
-    pub fn all_blogs(&self) -> Result<Vec<Blog>, Error> {
+    pub fn get_all_blogs(&self) -> Result<Vec<Blog>, Error> {
         let mut stmt = self.conn.prepare("SELECT * FROM blogposts;")?;
         let iter = stmt.query_map([], |row| Blog::from_row(row))?;
 
@@ -65,6 +63,13 @@ impl<'a> Repo<'a> {
         }
 
         Ok(blogs)
+    }
+
+    pub fn get_layout(&self, name: &str) -> Result<Layout, Error> {
+        let mut stmt = self.conn.prepare("SELECT * FROM layouts WHERE id = ?;")?;
+        let layout = stmt.query_row([name], |row| Layout::from_row(row))?;
+
+        Ok(layout)
     }
 }
 
@@ -91,4 +96,13 @@ impl Blog {
 pub struct Layout {
     pub id: String,
     pub html: String,
+}
+
+impl Layout {
+    fn from_row(row: &rusqlite::Row) -> Result<Layout, rusqlite::Error> {
+        Ok(Layout {
+            id: row.get(0)?,
+            html: row.get(1)?,
+        })
+    }
 }
