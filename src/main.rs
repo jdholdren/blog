@@ -77,6 +77,9 @@ fn main() -> Result<(), Error> {
     // Build out the database
     let conn = Connection::open("./db.sqlite").with_context("issue opening db")?;
 
+    // Crawl all layouts and put them in the DB
+    insert_layouts(&conn)?;
+
     // Crawl all static assets and insert them
     // insert_static_entries(&conn)?;
 
@@ -86,29 +89,30 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 
-// Inserts all static files into the db
-fn insert_static_entries(conn: &Connection) -> Result<(), Error> {
-    // Set up the table for reuseable assets
+const LAYOUT_DIR: &str = "./layouts/";
+
+fn insert_layouts(conn: &Connection) -> Result<(), Error> {
     conn.execute(
         "
-        CREATE TABLE static_assets (
+        CREATE TABLE layouts (
             id TEXT PRIMARY KEY,
-            data BLOB
+            html BLOB
         );",
         params![],
     )?;
 
-    let files = walk_directory("./static").with_context("error walking static dir")?;
+    for mut layout in walk_directory(LAYOUT_DIR)? {
+        let contents = fs::read_to_string(&layout)?;
 
-    for file in files {
-        // Read in the file and insert it into the db
-        let contents =
-            fs::read_to_string(&file).with_context(&format!("issue reading file: {}", file))?;
+        // Trim off the folder name to get the layout id
+        layout.replace_range(0..LAYOUT_DIR.len(), "");
 
+        // Insert it into the db
         conn.execute(
-            "INSERT INTO static_assets (id, data) VALUES (?1, ?2)",
-            params![&file, &contents],
-        )?;
+            "INSERT INTO layouts (id, html) VALUES (?1, ?2);",
+            params![&layout, &contents],
+        )
+        .with_context("issue inserting layout")?;
     }
 
     Ok(())
@@ -139,8 +143,6 @@ fn insert_blogs(conn: &Connection) -> Result<(), Error> {
         let mut bytes = Vec::new();
         pulldown_cmark::html::write_html(Cursor::new(&mut bytes), parser)?;
         let html = &String::from_utf8_lossy(&bytes)[..];
-
-        print!("\n{}", html);
 
         // Insert it into the db
         conn.execute(
