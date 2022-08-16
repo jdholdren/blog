@@ -3,8 +3,11 @@ use std::fs;
 use std::io::Cursor;
 
 use pulldown_cmark::Parser;
-use rusqlite::params;
+use repo::Repo;
 use rusqlite::Connection;
+
+mod pages;
+mod repo;
 
 // Defining a custom error message
 #[derive(Debug)]
@@ -76,31 +79,25 @@ fn main() -> Result<(), Error> {
 
     // Build out the database
     let conn = Connection::open("./db.sqlite").with_context("issue opening db")?;
+    let repo = repo::Repo { conn: &conn };
+
+    repo.setup_tables()?;
 
     // Crawl all layouts and put them in the DB
-    insert_layouts(&conn)?;
-
-    // Crawl all static assets and insert them
-    // insert_static_entries(&conn)?;
+    insert_layouts(&repo)?;
 
     // Crawl all blogposts to insert into the db
-    insert_blogs(&conn)?;
+    insert_blogs(&repo)?;
+
+    // Pages to be generated
+    pages::generate_index(&repo)?;
 
     Ok(())
 }
 
 const LAYOUT_DIR: &str = "./layouts/";
 
-fn insert_layouts(conn: &Connection) -> Result<(), Error> {
-    conn.execute(
-        "
-        CREATE TABLE layouts (
-            id TEXT PRIMARY KEY,
-            html BLOB
-        );",
-        params![],
-    )?;
-
+fn insert_layouts(repo: &Repo) -> Result<(), Error> {
     for mut layout in walk_directory(LAYOUT_DIR)? {
         let contents = fs::read_to_string(&layout)?;
 
@@ -108,29 +105,16 @@ fn insert_layouts(conn: &Connection) -> Result<(), Error> {
         layout.replace_range(0..LAYOUT_DIR.len(), "");
 
         // Insert it into the db
-        conn.execute(
-            "INSERT INTO layouts (id, html) VALUES (?1, ?2);",
-            params![&layout, &contents],
-        )
-        .with_context("issue inserting layout")?;
+        repo.insert_layout(&repo::Layout {
+            id: layout,
+            html: contents,
+        })?;
     }
 
     Ok(())
 }
 
-fn insert_blogs(conn: &Connection) -> Result<(), Error> {
-    // Set up the table for blog posts
-    conn.execute(
-        "
-        CREATE TABLE IF NOT EXISTS blogposts (
-            id TEXT PRIMARY KEY,
-            title TEXT NOT NULL,
-            publish_date TEXT NOT NULL,
-            html BLOB
-        );",
-        params![],
-    )?;
-
+fn insert_blogs(repo: &Repo) -> Result<(), Error> {
     for blog in walk_directory("./posts")? {
         let contents = fs::read_to_string(&blog)?;
         let mut parser = pulldown_cmark::Parser::new_ext(&contents, pulldown_cmark::Options::all());
@@ -145,11 +129,12 @@ fn insert_blogs(conn: &Connection) -> Result<(), Error> {
         let html = &String::from_utf8_lossy(&bytes)[..];
 
         // Insert it into the db
-        conn.execute(
-            "INSERT INTO blogposts (id, title, publish_date, html) VALUES (?1, ?2, ?3, ?4);",
-            params![&blog, metadata.title, metadata.publish_date, &html],
-        )
-        .with_context("issue inserting blog")?;
+        repo.insert_blog(&repo::Blog {
+            id: blog,
+            title: metadata.title,
+            publish_date: metadata.publish_date,
+            html: html.to_string(),
+        })?;
     }
 
     Ok(())
