@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::fs;
+use std::io::Cursor;
 
+use pulldown_cmark::Parser;
 use rusqlite::params;
 use rusqlite::Connection;
 
@@ -126,17 +128,19 @@ fn insert_blogs(conn: &Connection) -> Result<(), Error> {
     )?;
 
     for blog in walk_directory("./posts")? {
-        let markdown =
-            fs::read_to_string(&blog).with_context(&format!("error reading blog {}", blog))?;
-        let parser = pulldown_cmark::Parser::new_ext(&markdown, pulldown_cmark::Options::all());
+        let contents = fs::read_to_string(&blog)?;
+        let mut parser = pulldown_cmark::Parser::new_ext(&contents, pulldown_cmark::Options::all());
 
-        let (front_matter, body_start) = parse_frontmatter(&blog)?;
+        // Meta information about the blog
+        let front_matter = parse_frontmatter(&mut parser)
+            .with_context(&format!("could not parse frontmatter for {}", blog))?;
         let metadata = frontmatter_to_meta(&front_matter);
 
-        // Parse the
-        let mut html = String::new();
+        let mut bytes = Vec::new();
+        pulldown_cmark::html::write_html(Cursor::new(&mut bytes), parser)?;
+        let html = &String::from_utf8_lossy(&bytes)[..];
 
-        println!("{}", blog);
+        print!("\n{}", html);
 
         // Insert it into the db
         conn.execute(
@@ -179,14 +183,9 @@ type Frontmatter = HashMap<String, String>;
 
 // Parses a md file to get the front matter and the offset of the
 // real content
-fn parse_frontmatter(blog_file: &str) -> Result<(Frontmatter, u32), Error> {
-    let markdown = fs::read_to_string(&blog_file)
-        .with_context(&format!("error reading blog {}", blog_file))?;
-    let parser = pulldown_cmark::Parser::new_ext(&markdown, pulldown_cmark::Options::all());
-
+fn parse_frontmatter(parser: &mut Parser) -> Result<Frontmatter, Error> {
     let mut reading_frontmatter = false;
     let mut fm = Frontmatter::new();
-    let content_start = 0;
 
     'events: for event in parser {
         if !reading_frontmatter {
@@ -197,10 +196,7 @@ fn parse_frontmatter(blog_file: &str) -> Result<(Frontmatter, u32), Error> {
                 }
                 pulldown_cmark::Event::SoftBreak => {}
                 _ => {
-                    return Err(Error::new(&format!(
-                        "frontmatter not found for {}",
-                        blog_file
-                    )));
+                    return Err(Error::new("frontmatter not found"));
                 }
             }
         }
@@ -214,10 +210,7 @@ fn parse_frontmatter(blog_file: &str) -> Result<(Frontmatter, u32), Error> {
             pulldown_cmark::Event::End(_) => continue,           // Ignored
             _ => {
                 // Unhandle-able
-                return Err(Error::new(&format!(
-                    "bad frontmatter for {}, found: {:?}",
-                    blog_file, event
-                )));
+                return Err(Error::new(&format!("bad frontmatter, found: {:?}", event)));
             }
         };
 
@@ -231,7 +224,7 @@ fn parse_frontmatter(blog_file: &str) -> Result<(Frontmatter, u32), Error> {
         fm.insert(key, value);
     }
 
-    Ok((fm, content_start))
+    Ok(fm)
 }
 
 struct Meta {
