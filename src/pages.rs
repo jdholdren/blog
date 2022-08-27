@@ -1,31 +1,52 @@
 use crate::repo;
 use crate::Error;
-use repo::Repo;
+use crate::Result;
+use repo::{Blog, Repo};
 
 use regex::Regex;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 
-pub fn generate_archive(repo: &Repo) -> Result<(), Error> {
-    // Need all the blogs to render to a list
-    let blogs = repo.get_all_blogs()?;
+use maplit::hashmap;
 
-    // Need the template for the page
-    let layout = repo.get_layout("blog.layout.html")?;
-
-    let mut args = HashMap::new();
-    args.insert("contents", "something");
-    args.insert("title", "something_else");
-
-    let contents = replace_placeholders(&layout.html, args)?;
-    let mut f = File::create("./generated/archive.html")?;
-    f.write_all(contents.as_bytes())?;
-
-    Ok(())
+pub struct Pages<'a> {
+    pub repo: &'a Repo<'a>,
 }
 
-fn replace_placeholders(layout: &str, args: HashMap<&str, &str>) -> Result<String, Error> {
+impl<'a> Pages<'a> {
+    pub fn generate_index(&self) -> Result<()> {
+        // Need all the blogs to render to a list
+        let blogs = self.repo.get_all_blogs()?;
+
+        let mut blogs_arg = String::new();
+        for blog in blogs {
+            let blurb = self.blog_to_blurb(&blog)?;
+            blogs_arg.push_str(&blurb);
+        }
+
+        // Need the template for the page
+        let layout = self.repo.get_layout("index.layout.html")?;
+
+        let mut args: HashMap<&str, &str> = HashMap::new();
+        args.insert("blurbs", &blogs_arg);
+
+        let contents = replace_placeholders(&layout.html, args)?;
+        let mut f = File::create("./generated/index.html")?;
+        f.write_all(contents.as_bytes())?;
+
+        Ok(())
+    }
+
+    // Converts a blog post to a short excerpt string
+    fn blog_to_blurb(&self, b: &Blog) -> Result<String> {
+        // Get the layout for the blurb
+        let layout = self.repo.get_layout("blurb.layout.html")?;
+        replace_placeholders(&layout.html, hashmap! { "title" => b.title.as_str() })
+    }
+}
+
+fn replace_placeholders(layout: &str, args: HashMap<&str, &str>) -> Result<String> {
     let mut result = layout.to_owned();
 
     // Cause we need to do this in reverse order...

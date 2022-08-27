@@ -1,9 +1,10 @@
-run: clean
-	cargo run
+generated:
+	cargo run --release
 
 clean:
 	rm -rf ./generated
-	rm -f db.sqlite
+.PHONY: generated
 
 browse:
 	open ./generated/index.html
+.PHONY: browse

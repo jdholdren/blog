@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::Result;
 use crate::WithMessage;
 
 use rusqlite::params;
@@ -9,7 +9,7 @@ pub struct Repo<'a> {
 }
 
 impl<'a> Repo<'a> {
-    pub fn setup_tables(&self) -> Result<(), Error> {
+    pub fn setup_tables(&self) -> Result<()> {
         self.conn.execute(
             "CREATE TABLE layouts (
             id TEXT PRIMARY KEY,
@@ -31,7 +31,7 @@ impl<'a> Repo<'a> {
         Ok(())
     }
 
-    pub fn insert_blog(&self, blog: &Blog) -> Result<(), Error> {
+    pub fn insert_blog(&self, blog: &Blog) -> Result<()> {
         self.conn
             .execute(
                 "INSERT INTO blogposts (id, title, publish_date, html) VALUES (?1, ?2, ?3, ?4);",
@@ -42,7 +42,7 @@ impl<'a> Repo<'a> {
         Ok(())
     }
 
-    pub fn insert_layout(&self, l: &Layout) -> Result<(), Error> {
+    pub fn insert_layout(&self, l: &Layout) -> Result<()> {
         self.conn
             .execute(
                 "INSERT INTO layouts (id, html) VALUES (?1, ?2);",
@@ -53,9 +53,9 @@ impl<'a> Repo<'a> {
         Ok(())
     }
 
-    pub fn get_all_blogs(&self) -> Result<Vec<Blog>, Error> {
+    pub fn get_all_blogs(&self) -> Result<Vec<Blog>> {
         let mut stmt = self.conn.prepare("SELECT * FROM blogposts;")?;
-        let iter = stmt.query_map([], |row| Blog::from_row(row))?;
+        let iter = stmt.query_map([], Blog::from_row)?;
 
         let mut blogs = Vec::new();
         for blog in iter {
@@ -65,9 +65,9 @@ impl<'a> Repo<'a> {
         Ok(blogs)
     }
 
-    pub fn get_layout(&self, name: &str) -> Result<Layout, Error> {
+    pub fn get_layout(&self, name: &str) -> Result<Layout> {
         let mut stmt = self.conn.prepare("SELECT * FROM layouts WHERE id = ?;")?;
-        let layout = stmt.query_row([name], |row| Layout::from_row(row))?;
+        let layout = stmt.query_row([name], Layout::from_row)?;
 
         Ok(layout)
     }
@@ -82,7 +82,7 @@ pub struct Blog {
 }
 
 impl Blog {
-    fn from_row(row: &rusqlite::Row) -> Result<Blog, rusqlite::Error> {
+    fn from_row(row: &rusqlite::Row) -> std::result::Result<Blog, rusqlite::Error> {
         Ok(Blog {
             id: row.get(0)?,
             title: row.get(1)?,
@@ -99,7 +99,7 @@ pub struct Layout {
 }
 
 impl Layout {
-    fn from_row(row: &rusqlite::Row) -> Result<Layout, rusqlite::Error> {
+    fn from_row(row: &rusqlite::Row) -> std::result::Result<Layout, rusqlite::Error> {
         Ok(Layout {
             id: row.get(0)?,
             html: row.get(1)?,
