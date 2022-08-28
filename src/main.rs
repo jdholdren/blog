@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::Cursor;
 
+use fs_extra::dir::CopyOptions;
 use pulldown_cmark::Parser;
 use repo::Repo;
 use rusqlite::Connection;
@@ -13,6 +14,15 @@ fn main() -> Result<()> {
     // Blow away the db and destination folder
     fs::remove_file("./db.sqlite").ok();
     fs::remove_dir_all("./generated").ok();
+
+    // Make sure we have a folder to store the generated blog
+    fs::create_dir("./generated").expect("error creating generated dir");
+    fs::create_dir("./generated/static").expect("error creating static dir");
+
+    // Copies the static directory over to the generated folder
+    let options = CopyOptions::new();
+    fs_extra::dir::copy("./static", "./generated", &options)
+        .expect("could not copy static assets over");
 
     // How I'm thinking about this going forward:
     //
@@ -34,9 +44,6 @@ fn main() -> Result<()> {
 
     // Crawl all blogposts to insert into the db
     insert_blogs(&repo)?;
-
-    // Make sure we have a folder to store the generated blog
-    fs::create_dir("./generated")?;
 
     // Pages to be generated
     let p = pages::Pages { repo: &repo };
