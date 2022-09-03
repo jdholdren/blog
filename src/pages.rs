@@ -16,6 +16,10 @@ pub struct Pages<'a> {
 
 impl<'a> Pages<'a> {
     pub fn generate_index(&self) -> Result<()> {
+        // Always need the header
+        // TODO: Maybe this should just be in the render function so it's always there
+        let header = self.repo.get_layout("header.layout.html")?;
+
         // Need all the blogs to render to a list
         let blogs = self.repo.latest_blogs(3)?;
 
@@ -30,6 +34,7 @@ impl<'a> Pages<'a> {
 
         let mut args: HashMap<&str, &str> = HashMap::new();
         args.insert("latest_posts", &blogs_arg);
+        args.insert("header", &header.html);
 
         let contents = replace_placeholders(&layout.html, args)?;
         let mut f = File::create("./generated/index.html")?;
