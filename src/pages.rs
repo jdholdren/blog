@@ -82,7 +82,7 @@ impl<'a> Pages<'a> {
                 "title" => b.title.as_str(),
                 "excerpt" => b.excerpt.as_str(),
                 "publish_date" => b.publish_date.as_str(),
-                "slug" => b.slug.as_str(),
+                "link" => b.slug.as_str(),
             },
         )
     }

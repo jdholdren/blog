@@ -149,12 +149,18 @@ fn parse_frontmatter(parser: &mut Parser) -> Result<Frontmatter> {
             }
         }
 
+        let mut should_parse = false;
         if let pulldown_cmark::Event::SoftBreak = event {
+            should_parse = true;
+        } else if let pulldown_cmark::Event::End(_) = event {
+            should_parse = true;
+        }
+
+        if should_parse {
             // The first delimeter is a ':', then everything after is the value
-            let mut split = building.split(':').collect::<Vec<&str>>();
-            let key = split[0].to_string();
-            split.remove(0);
-            let value = split.join("").trim().to_string();
+            let pos = building.chars().position(|c| c == ':').unwrap();
+            let key = building[..pos].to_string();
+            let value = building[(pos + 1)..].trim().to_string();
 
             // New we're good to insert into our fm
             fm.insert(key, value);
@@ -183,10 +189,10 @@ struct Meta {
 
 fn frontmatter_to_meta(fm: &Frontmatter) -> Meta {
     Meta {
-        title: fm.get("title").unwrap_or(&"".to_string()).to_string(),
-        publish_date: fm.get("publishDate").unwrap_or(&"".to_string()).to_string(),
-        excerpt: fm.get("excerpt").unwrap_or(&"".to_owned()).to_owned(),
-        slug: fm.get("slug").unwrap_or(&"".to_owned()).to_owned(),
+        title: fm.get("title").unwrap().to_string(),
+        publish_date: fm.get("publishDate").unwrap().to_string(),
+        excerpt: fm.get("excerpt").unwrap().to_owned(),
+        slug: fm.get("slug").unwrap().to_owned(),
     }
 }
 

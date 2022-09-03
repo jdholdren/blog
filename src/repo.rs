@@ -56,7 +56,9 @@ impl<'a> Repo<'a> {
     }
 
     pub fn get_all_blogs(&self) -> Result<Vec<Blog>> {
-        let mut stmt = self.conn.prepare("SELECT * FROM blogposts;")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT * FROM blogposts ORDER BY publish_date DESC;")?;
         let iter = stmt.query_map([], Blog::from_row)?;
 
         let mut blogs = Vec::new();
