@@ -43,6 +43,35 @@ impl<'a> Pages<'a> {
         Ok(())
     }
 
+    pub fn generate_all_posts(&self) -> Result<()> {
+        // Always need the header
+        // TODO: Maybe this should just be in the render function so it's always there
+        let header = self.repo.get_layout("header.layout.html")?;
+
+        // Need all the blogs to render to a list
+        let blogs = self.repo.get_all_blogs()?;
+
+        let mut blogs_arg = String::new();
+        for blog in blogs {
+            let blurb = self.blog_to_blurb(&blog)?;
+            blogs_arg.push_str(&blurb);
+        }
+
+        // Need the template for the page
+        let layout = self.repo.get_layout("all_posts.layout.html")?;
+
+        let mut args: HashMap<&str, &str> = HashMap::new();
+        args.insert("posts", &blogs_arg);
+        args.insert("header", &header.html);
+
+        let contents = replace_placeholders(&layout.html, args)?;
+        std::fs::create_dir_all("./generated/posts")?;
+        let mut f = File::create("./generated/posts/index.html")?;
+        f.write_all(contents.as_bytes())?;
+
+        Ok(())
+    }
+
     // Converts a blog post to a short excerpt string
     fn blog_to_blurb(&self, b: &Blog) -> Result<String> {
         // Get the layout for the blurb

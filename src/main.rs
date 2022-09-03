@@ -48,6 +48,7 @@ fn main() -> Result<()> {
     // Pages to be generated
     let p = pages::Pages { repo: &repo };
     p.generate_index()?;
+    p.generate_all_posts()?;
 
     Ok(())
 }
