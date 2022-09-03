@@ -85,3 +85,30 @@ section h1 {
 	margin-bottom: 0.4rem;
 	margin-top: 0.2rem;
 }
+
+.project {
+	color: rgb(0, 0, 0, 0.8);
+	padding: 1.5rem;
+	transition: background-color 0.3s;
+	border-radius: 18px;
+}
+
+.project:hover {
+	background-color: var(--light);
+	cursor: pointer;
+}
+
+.project h2 {
+	color: rgb(0, 0, 0, 0.8);
+	margin-bottom: 0.4rem;
+	margin-top: 0.2rem;
+}
+
+ul li a {
+	text-decoration: underline;
+	color: var(--dark);
+}
+
+ul li a:visited {
+	color: var(--dark);
+}
