@@ -90,7 +90,9 @@ fn insert_blogs(repo: &Repo) -> Result<()> {
             id: blog,
             title: metadata.title,
             publish_date: metadata.publish_date,
+            excerpt: metadata.excerpt,
             html: html.to_string(),
+            slug: metadata.slug,
         })?;
     }
 
@@ -130,6 +132,7 @@ type Frontmatter = HashMap<String, String>;
 fn parse_frontmatter(parser: &mut Parser) -> Result<Frontmatter> {
     let mut reading_frontmatter = false;
     let mut fm = Frontmatter::new();
+    let mut building = String::new(); // If we're building a text value
 
     'events: for event in parser {
         if !reading_frontmatter {
@@ -145,27 +148,26 @@ fn parse_frontmatter(parser: &mut Parser) -> Result<Frontmatter> {
             }
         }
 
-        let data = match event {
-            pulldown_cmark::Event::Text(tag) => tag.to_string(), // Info
-            pulldown_cmark::Event::Rule => break 'events,        // End of the frontmatter
-            pulldown_cmark::Event::SoftBreak => continue,        // Ignored
-            pulldown_cmark::Event::HardBreak => continue,        // Ignored
-            pulldown_cmark::Event::Start(_) => continue,         // Ignored
-            pulldown_cmark::Event::End(_) => continue,           // Ignored
-            _ => {
-                // Unhandle-able
-                return Err(Error::new(&format!("bad frontmatter, found: {:?}", event)));
-            }
-        };
+        if let pulldown_cmark::Event::SoftBreak = event {
+            // The first delimeter is a ':', then everything after is the value
+            let mut split = building.split(':').collect::<Vec<&str>>();
+            let key = split[0].to_string();
+            split.remove(0);
+            let value = split.join("").trim().to_string();
 
-        // The first delimeter is a ':', then everything after is the value
-        let mut split = data.split(':').collect::<Vec<&str>>();
-        let key = split[0].to_string();
-        split.remove(0);
-        let value = split.join("").trim().to_string();
+            // New we're good to insert into our fm
+            fm.insert(key, value);
 
-        // New we're good to insert into our fm
-        fm.insert(key, value);
+            // Clear the built variable
+            building = String::new();
+
+            continue;
+        } else if let pulldown_cmark::Event::Text(tag) = event {
+            building.push_str(&tag);
+            continue;
+        } else if let pulldown_cmark::Event::Rule = event {
+            break 'events;
+        }
     }
 
     Ok(fm)
@@ -174,12 +176,16 @@ fn parse_frontmatter(parser: &mut Parser) -> Result<Frontmatter> {
 struct Meta {
     title: String,
     publish_date: String,
+    excerpt: String,
+    slug: String,
 }
 
 fn frontmatter_to_meta(fm: &Frontmatter) -> Meta {
     Meta {
         title: fm.get("title").unwrap_or(&"".to_string()).to_string(),
         publish_date: fm.get("publishDate").unwrap_or(&"".to_string()).to_string(),
+        excerpt: fm.get("excerpt").unwrap_or(&"".to_owned()).to_owned(),
+        slug: fm.get("slug").unwrap_or(&"".to_owned()).to_owned(),
     }
 }
 

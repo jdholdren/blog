@@ -23,6 +23,8 @@ impl<'a> Repo<'a> {
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
             publish_date TEXT NOT NULL,
+            excerpt TEXT NOT NULL,
+            slug TEXT NOT NULL,
             html BLOB
         );",
             params![],
@@ -34,8 +36,8 @@ impl<'a> Repo<'a> {
     pub fn insert_blog(&self, blog: &Blog) -> Result<()> {
         self.conn
             .execute(
-                "INSERT INTO blogposts (id, title, publish_date, html) VALUES (?1, ?2, ?3, ?4);",
-                params![blog.id, blog.title, blog.publish_date, blog.html],
+                "INSERT INTO blogposts (id, title, publish_date, excerpt, slug, html) VALUES (?1, ?2, ?3, ?4, ?5, ?6);",
+                params![blog.id, blog.title, blog.publish_date, blog.excerpt, blog.slug, blog.html],
             )
             .with_context("issue inserting blog")?;
 
@@ -65,6 +67,21 @@ impl<'a> Repo<'a> {
         Ok(blogs)
     }
 
+    pub fn latest_blogs(&self, n: u16) -> Result<Vec<Blog>> {
+        let mut stmt = self.conn.prepare(&format!(
+            "SELECT * FROM blogposts ORDER BY publish_date DESC LIMIT {};",
+            n
+        ))?;
+        let iter = stmt.query_map([], Blog::from_row)?;
+
+        let mut blogs = Vec::new();
+        for blog in iter {
+            blogs.push(blog?);
+        }
+
+        Ok(blogs)
+    }
+
     pub fn get_layout(&self, name: &str) -> Result<Layout> {
         let mut stmt = self.conn.prepare("SELECT * FROM layouts WHERE id = ?;")?;
         let layout = stmt.query_row([name], Layout::from_row)?;
@@ -78,7 +95,9 @@ pub struct Blog {
     pub id: String,
     pub title: String,
     pub publish_date: String,
+    pub excerpt: String,
     pub html: String,
+    pub slug: String,
 }
 
 impl Blog {
@@ -87,7 +106,9 @@ impl Blog {
             id: row.get(0)?,
             title: row.get(1)?,
             publish_date: row.get(2)?,
-            html: row.get(3)?,
+            excerpt: row.get(3)?,
+            slug: row.get(4)?,
+            html: row.get(5)?,
         })
     }
 }

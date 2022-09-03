@@ -3,18 +3,22 @@
 
 <head>
 	<title>James Holdren</title>
+	
+	<link rel="stylesheet" href="/static/css/main.css">
 </head>
 
 <body>
 	<header>
-		<nav class="menu">
-			<ul>
-				<li><a href="#">Home</a></li>
-				<li><a href="#">About</a></li>
-				<li><a href="#">Contact</a></li>
-			</ul>
+		<nav class="menu with-gutter">	
+			<div class="name">James Holdren</div>
+			<div class="link"><a href="/posts">All Posts</a></div>
 		</nav>
 	</header>
+
+	<section class="with-gutter">
+		<h1>Latest Posts</h1>
+		{{latest_posts}}
+	</section>
 </body>
 
 </html>

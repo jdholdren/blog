@@ -17,7 +17,7 @@ pub struct Pages<'a> {
 impl<'a> Pages<'a> {
     pub fn generate_index(&self) -> Result<()> {
         // Need all the blogs to render to a list
-        let blogs = self.repo.get_all_blogs()?;
+        let blogs = self.repo.latest_blogs(3)?;
 
         let mut blogs_arg = String::new();
         for blog in blogs {
@@ -29,7 +29,7 @@ impl<'a> Pages<'a> {
         let layout = self.repo.get_layout("index.layout.html")?;
 
         let mut args: HashMap<&str, &str> = HashMap::new();
-        args.insert("blurbs", &blogs_arg);
+        args.insert("latest_posts", &blogs_arg);
 
         let contents = replace_placeholders(&layout.html, args)?;
         let mut f = File::create("./generated/index.html")?;
@@ -42,7 +42,15 @@ impl<'a> Pages<'a> {
     fn blog_to_blurb(&self, b: &Blog) -> Result<String> {
         // Get the layout for the blurb
         let layout = self.repo.get_layout("blurb.layout.html")?;
-        replace_placeholders(&layout.html, hashmap! { "title" => b.title.as_str() })
+        replace_placeholders(
+            &layout.html,
+            hashmap! {
+                "title" => b.title.as_str(),
+                "excerpt" => b.excerpt.as_str(),
+                "publish_date" => b.publish_date.as_str(),
+                "slug" => b.slug.as_str(),
+            },
+        )
     }
 }
 
@@ -53,7 +61,7 @@ fn replace_placeholders(layout: &str, args: HashMap<&str, &str>) -> Result<Strin
     let mut v = Vec::new();
 
     // Can use a lazy macro to make this static
-    let re = Regex::new(r"\{\{([a-z.]+)\}\}").unwrap();
+    let re = Regex::new(r"\{\{([a-z._]+)\}\}").unwrap();
     let caps = re.captures_iter(&result);
     for cap in caps {
         let outer_group = cap.get(0).unwrap();

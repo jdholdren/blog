@@ -3,24 +3,85 @@
 html, body {
 	margin: 0px;
 	font-family: 'Roboto', sans-serif;
+	background: #fff;
 
-	--main-text-color: #323232;
-	--green: #588157;
-	--green-dark: #3A5A40;
-
-	color: var(--main-text-color);
+	--dark: #386a20;
+	--light: #b6f397;
 
 	height: 100%;
 }
 
-ul {
-	list-style-type: none;
-	margin: 0px;
-	padding: 0px;
-	width: auto;
+.with-gutter {
+	max-width: 48rem;
+	margin: auto;
+}
+
+header {
+}
+
+nav.menu {
+	display: flex;
+	flex-direction:row;
+	column-gap: 0.7rem;
+	align-items: center;
+
+	height: 5rem;
+}
+
+.menu .name {
+	margin-right: 2rem;
+	font-weight: bold;
+	font-size: 1.2rem;
+}
+
+.menu .link {
+	padding-left: 1rem;
+	padding-right: 1rem;
+	padding-top: 0.5rem;
+	padding-bottom: 0.6rem;
+	height: 1rem;
+	border: 1px solid var(--light);
+	border-radius: 3rem;
+	background-color: var(--light);
+	color: rgb(0, 0, 0, 0.8);
+
+	transition: background-color 0.4s;
+	transition: color 0.4s;
+}
+
+.menu .link:hover {
+	background-color: var(--light);
+	cursor: pointer;
 }
 
 a, a:hover, a:visited {
 	color: inherit;
 	text-decoration: none;
+}
+
+section h1 {
+	color: var(--dark);
+	font-size: 2.2rem;
+}
+
+.blog_blurb {
+	color: rgb(0, 0, 0, 0.8);
+	padding: 1.5rem;
+	transition: background-color 0.3s;
+	border-radius: 18px;
+}
+
+.blog_blurb:hover {
+	background-color: var(--light);
+	cursor: pointer;
+}
+
+.blog_blurb .publish-date {
+	font-weight: bold;
+}
+
+.blog_blurb h2 {
+	color: rgb(0, 0, 0, 0.8);
+	margin-bottom: 0.4rem;
+	margin-top: 0.2rem;
 }
