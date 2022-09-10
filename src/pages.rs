@@ -10,12 +10,20 @@ use std::io::Write;
 
 use maplit::hashmap;
 
-pub struct Pages<'a> {
+pub struct Pages<'a, 'b> {
     pub repo: &'a Repo<'a>,
+    page_list: Vec<&'b str>,
 }
 
-impl<'a> Pages<'a> {
-    pub fn generate_index(&self) -> Result<()> {
+impl<'a, 'b> Pages<'a, 'b> {
+    pub fn new(repo: &'a Repo) -> Pages<'a, 'b> {
+        Pages {
+            repo,
+            page_list: vec![],
+        }
+    }
+
+    pub fn generate_index(&mut self) -> Result<()> {
         // Always need the header
         // TODO: Maybe this should just be in the render function so it's always there
         let header = self.repo.get_layout("header.layout.html")?;
@@ -40,10 +48,14 @@ impl<'a> Pages<'a> {
         let mut f = File::create("./generated/index.html")?;
         f.write_all(contents.as_bytes())?;
 
+        // Add the page for the sitelist
+        // TODO: Don't hardcode this? eh idk
+        self.page_list.push("https://jamesholdren.com");
+
         Ok(())
     }
 
-    pub fn generate_all_posts(&self) -> Result<()> {
+    pub fn generate_all_posts(&mut self) -> Result<()> {
         // Always need the header
         // TODO: Maybe this should just be in the render function so it's always there
         let header = self.repo.get_layout("header.layout.html")?;
@@ -69,6 +81,9 @@ impl<'a> Pages<'a> {
         let mut f = File::create("./generated/posts/index.html")?;
         f.write_all(contents.as_bytes())?;
 
+        // Add page to sitemap
+        self.page_list.push("https://jamesholdren.com/posts");
+
         Ok(())
     }
 
@@ -85,6 +100,16 @@ impl<'a> Pages<'a> {
                 "link" => b.slug.as_str(),
             },
         )
+    }
+
+    // Takes the page_list and turns it into a text sitemap
+    pub fn generate_sitemap(&self) -> Result<()> {
+        let mut f = File::create("./generated/sitemap.txt")?;
+        for page in &self.page_list {
+            write!(f, "{}\n", page)?;
+        }
+
+        Ok(())
     }
 }
 

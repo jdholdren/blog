@@ -46,9 +46,10 @@ fn main() -> Result<()> {
     insert_blogs(&repo)?;
 
     // Pages to be generated
-    let p = pages::Pages { repo: &repo };
+    let mut p = pages::Pages::new(&repo);
     p.generate_index()?;
     p.generate_all_posts()?;
+    p.generate_sitemap()?;
 
     Ok(())
 }
