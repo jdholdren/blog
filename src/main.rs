@@ -46,7 +46,7 @@ fn main() -> Result<()> {
     insert_blogs(&repo)?;
 
     // Pages to be generated
-    let mut p = pages::Pages::new(&repo);
+    let mut p = pages::Pages::new(&repo)?;
     p.generate_index()?;
     p.generate_all_posts()?;
     p.generate_sitemap()?;
@@ -55,13 +55,15 @@ fn main() -> Result<()> {
 }
 
 const LAYOUT_DIR: &str = "./layouts/";
+const LAYOUT_SUFFIX: &str = ".layout.html";
 
 fn insert_layouts(repo: &Repo) -> Result<()> {
     for mut layout in walk_directory(LAYOUT_DIR)? {
         let contents = fs::read_to_string(&layout)?;
 
-        // Trim off the folder name to get the layout id
+        // Trim off the folder name (and suffix) to get the layout id
         layout.replace_range(0..LAYOUT_DIR.len(), "");
+        layout = layout.replace(LAYOUT_SUFFIX, "");
 
         // Insert it into the db
         repo.insert_layout(&repo::Layout {

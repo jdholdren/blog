@@ -13,21 +13,28 @@ use maplit::hashmap;
 pub struct Pages<'a, 'b> {
     pub repo: &'a Repo<'a>,
     page_list: Vec<&'b str>,
+    templates: Vec<repo::Layout>,
 }
 
 impl<'a, 'b> Pages<'a, 'b> {
-    pub fn new(repo: &'a Repo) -> Pages<'a, 'b> {
-        Pages {
+    pub fn new(repo: &'a Repo) -> Result<Pages<'a, 'b>> {
+        Ok(Pages {
             repo,
             page_list: vec![],
+            templates: vec![repo.get_layout("header")?, repo.get_layout("footer")?],
+        })
+    }
+
+    // Adds the reusable templates to the argments going to any layout
+    fn add_tpls<'c>(&'c self, mut args: HashMap<&'c str, &'c str>) -> HashMap<&str, &str> {
+        for template in &self.templates {
+            args.insert(&template.id, &template.html);
         }
+
+        args
     }
 
     pub fn generate_index(&mut self) -> Result<()> {
-        // Always need the header
-        // TODO: Maybe this should just be in the render function so it's always there
-        let header = self.repo.get_layout("header.layout.html")?;
-
         // Need all the blogs to render to a list
         let blogs = self.repo.latest_blogs(3)?;
 
@@ -38,13 +45,12 @@ impl<'a, 'b> Pages<'a, 'b> {
         }
 
         // Need the template for the page
-        let layout = self.repo.get_layout("index.layout.html")?;
+        let layout = self.repo.get_layout("index")?;
 
         let mut args: HashMap<&str, &str> = HashMap::new();
         args.insert("latest_posts", &blogs_arg);
-        args.insert("header", &header.html);
 
-        let contents = replace_placeholders(&layout.html, args)?;
+        let contents = replace_placeholders(&layout.html, self.add_tpls(args))?;
         let mut f = File::create("./generated/index.html")?;
         f.write_all(contents.as_bytes())?;
 
@@ -56,10 +62,6 @@ impl<'a, 'b> Pages<'a, 'b> {
     }
 
     pub fn generate_all_posts(&mut self) -> Result<()> {
-        // Always need the header
-        // TODO: Maybe this should just be in the render function so it's always there
-        let header = self.repo.get_layout("header.layout.html")?;
-
         // Need all the blogs to render to a list
         let blogs = self.repo.get_all_blogs()?;
 
@@ -70,13 +72,12 @@ impl<'a, 'b> Pages<'a, 'b> {
         }
 
         // Need the template for the page
-        let layout = self.repo.get_layout("all_posts.layout.html")?;
+        let layout = self.repo.get_layout("all_posts")?;
 
         let mut args: HashMap<&str, &str> = HashMap::new();
         args.insert("posts", &blogs_arg);
-        args.insert("header", &header.html);
 
-        let contents = replace_placeholders(&layout.html, args)?;
+        let contents = replace_placeholders(&layout.html, self.add_tpls(args))?;
         std::fs::create_dir_all("./generated/posts")?;
         let mut f = File::create("./generated/posts/index.html")?;
         f.write_all(contents.as_bytes())?;
@@ -90,7 +91,7 @@ impl<'a, 'b> Pages<'a, 'b> {
     // Converts a blog post to a short excerpt string
     fn blog_to_blurb(&self, b: &Blog) -> Result<String> {
         // Get the layout for the blurb
-        let layout = self.repo.get_layout("blurb.layout.html")?;
+        let layout = self.repo.get_layout("blurb")?;
         replace_placeholders(
             &layout.html,
             hashmap! {
@@ -106,7 +107,7 @@ impl<'a, 'b> Pages<'a, 'b> {
     pub fn generate_sitemap(&self) -> Result<()> {
         let mut f = File::create("./generated/sitemap.txt")?;
         for page in &self.page_list {
-            write!(f, "{}\n", page)?;
+            write!(f, "{}", page)?;
         }
 
         Ok(())
