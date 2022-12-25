@@ -1,7 +1,5 @@
-use crate::repo;
 use crate::Error;
 use crate::Result;
-use repo::{Blog, Repo};
 
 use regex::Regex;
 use std::collections::HashMap;
@@ -10,33 +8,63 @@ use std::io::Write;
 
 use maplit::hashmap;
 
-pub struct Pages<'a, 'b> {
-    pub repo: &'a Repo<'a>,
-    page_list: Vec<&'b str>,
-    templates: Vec<repo::Layout>,
+#[derive(Debug)]
+pub struct Templates(HashMap<String, String>);
+
+impl Templates {
+    pub fn new(m: HashMap<String, String>) -> Templates {
+        Templates(m)
+    }
+
+    fn find(&self, id: &str) -> Result<&str> {
+        match self.0.get(id) {
+            Some(tpl) => Ok(&tpl),
+            None => Err(Error::new(&format!(
+                "unable to find template named '{}'",
+                id
+            ))),
+        }
+    }
 }
 
-impl<'a, 'b> Pages<'a, 'b> {
-    pub fn new(repo: &'a Repo) -> Result<Pages<'a, 'b>> {
-        Ok(Pages {
-            repo,
+#[derive(Debug)]
+pub struct Blog {
+    pub id: String,
+    pub title: String,
+    pub publish_date: String,
+    pub excerpt: String,
+    pub html: String,
+    pub slug: String,
+}
+
+pub struct Pages<'a> {
+    templates: Templates,
+    blogs: Vec<Blog>,
+    page_list: Vec<&'a str>,
+}
+
+impl<'a> Pages<'a> {
+    pub fn new(mut blogs: Vec<Blog>, templates: Templates) -> Pages<'a> {
+        blogs.sort_by(|a, b| a.publish_date.partial_cmp(&b.publish_date).unwrap());
+
+        Pages {
             page_list: vec![],
-            templates: vec![repo.get_layout("header")?, repo.get_layout("footer")?],
-        })
+            blogs,
+            templates,
+        }
     }
 
     // Adds the reusable templates to the argments going to any layout
-    fn add_tpls<'c>(&'c self, mut args: HashMap<&'c str, &'c str>) -> HashMap<&str, &str> {
-        for template in &self.templates {
-            args.insert(&template.id, &template.html);
+    fn add_tpls(&'a self, mut args: HashMap<&'a str, &'a str>) -> HashMap<&str, &str> {
+        for (id, template) in &self.templates.0 {
+            args.insert(&id, &template);
         }
 
         args
     }
 
     pub fn generate_index(&mut self) -> Result<()> {
-        // Need all the blogs to render to a list
-        let blogs = self.repo.latest_blogs(3)?;
+        let blogs = &self.blogs[0..3];
 
         let mut blogs_arg = String::new();
         for blog in blogs {
@@ -45,12 +73,12 @@ impl<'a, 'b> Pages<'a, 'b> {
         }
 
         // Need the template for the page
-        let layout = self.repo.get_layout("index")?;
+        let layout = self.templates.find("index")?;
 
         let mut args: HashMap<&str, &str> = HashMap::new();
         args.insert("latest_posts", &blogs_arg);
 
-        let contents = replace_placeholders(&layout.html, self.add_tpls(args))?;
+        let contents = replace_placeholders(&layout, self.add_tpls(args))?;
         let mut f = File::create("./generated/index.html")?;
         f.write_all(contents.as_bytes())?;
 
@@ -63,7 +91,7 @@ impl<'a, 'b> Pages<'a, 'b> {
 
     pub fn generate_all_posts(&mut self) -> Result<()> {
         // Need all the blogs to render to a list
-        let blogs = self.repo.get_all_blogs()?;
+        let blogs = &self.blogs;
 
         let mut blogs_arg = String::new();
         for blog in blogs {
@@ -72,12 +100,12 @@ impl<'a, 'b> Pages<'a, 'b> {
         }
 
         // Need the template for the page
-        let layout = self.repo.get_layout("all_posts")?;
+        let layout = self.templates.find("all_posts")?;
 
         let mut args: HashMap<&str, &str> = HashMap::new();
         args.insert("posts", &blogs_arg);
 
-        let contents = replace_placeholders(&layout.html, self.add_tpls(args))?;
+        let contents = replace_placeholders(&layout, self.add_tpls(args))?;
         std::fs::create_dir_all("./generated/posts")?;
         let mut f = File::create("./generated/posts/index.html")?;
         f.write_all(contents.as_bytes())?;
@@ -91,9 +119,9 @@ impl<'a, 'b> Pages<'a, 'b> {
     // Converts a blog post to a short excerpt string
     fn blog_to_blurb(&self, b: &Blog) -> Result<String> {
         // Get the layout for the blurb
-        let layout = self.repo.get_layout("blurb")?;
+        let layout = self.templates.find("blurb")?;
         replace_placeholders(
-            &layout.html,
+            &layout,
             hashmap! {
                 "title" => b.title.as_str(),
                 "excerpt" => b.excerpt.as_str(),
