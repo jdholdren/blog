@@ -74,7 +74,7 @@ fn blogs() -> Result<Vec<pages::Blog>> {
 
             // Insert it into the db
             Ok(pages::Blog {
-                id: blog_name.to_owned(),
+                id: blog_name,
                 title: metadata.title,
                 publish_date: metadata.publish_date,
                 excerpt: metadata.excerpt,

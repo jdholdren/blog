@@ -18,7 +18,7 @@ impl Templates {
 
     fn find(&self, id: &str) -> Result<&str> {
         match self.0.get(id) {
-            Some(tpl) => Ok(&tpl),
+            Some(tpl) => Ok(tpl),
             None => Err(Error::new(&format!(
                 "unable to find template named '{}'",
                 id
@@ -57,7 +57,7 @@ impl<'a> Pages<'a> {
     // Adds the reusable templates to the argments going to any layout
     fn add_tpls(&'a self, mut args: HashMap<&'a str, &'a str>) -> HashMap<&str, &str> {
         for (id, template) in &self.templates.0 {
-            args.insert(&id, &template);
+            args.insert(id, template);
         }
 
         args
@@ -68,7 +68,7 @@ impl<'a> Pages<'a> {
 
         let mut blogs_arg = String::new();
         for blog in blogs {
-            let blurb = self.blog_to_blurb(&blog)?;
+            let blurb = self.blog_to_blurb(blog)?;
             blogs_arg.push_str(&blurb);
         }
 
@@ -78,7 +78,7 @@ impl<'a> Pages<'a> {
         let mut args: HashMap<&str, &str> = HashMap::new();
         args.insert("latest_posts", &blogs_arg);
 
-        let contents = replace_placeholders(&layout, self.add_tpls(args))?;
+        let contents = replace_placeholders(layout, self.add_tpls(args))?;
         let mut f = File::create("./generated/index.html")?;
         f.write_all(contents.as_bytes())?;
 
@@ -95,7 +95,7 @@ impl<'a> Pages<'a> {
 
         let mut blogs_arg = String::new();
         for blog in blogs {
-            let blurb = self.blog_to_blurb(&blog)?;
+            let blurb = self.blog_to_blurb(blog)?;
             blogs_arg.push_str(&blurb);
         }
 
@@ -105,7 +105,7 @@ impl<'a> Pages<'a> {
         let mut args: HashMap<&str, &str> = HashMap::new();
         args.insert("posts", &blogs_arg);
 
-        let contents = replace_placeholders(&layout, self.add_tpls(args))?;
+        let contents = replace_placeholders(layout, self.add_tpls(args))?;
         std::fs::create_dir_all("./generated/posts")?;
         let mut f = File::create("./generated/posts/index.html")?;
         f.write_all(contents.as_bytes())?;
@@ -121,7 +121,7 @@ impl<'a> Pages<'a> {
         // Get the layout for the blurb
         let layout = self.templates.find("blurb")?;
         replace_placeholders(
-            &layout,
+            layout,
             hashmap! {
                 "title" => b.title.as_str(),
                 "excerpt" => b.excerpt.as_str(),
