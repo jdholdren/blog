@@ -45,7 +45,7 @@ pub struct Pages<'a> {
 
 impl<'a> Pages<'a> {
     pub fn new(mut blogs: Vec<Blog>, templates: Templates) -> Pages<'a> {
-        blogs.sort_by(|a, b| a.publish_date.partial_cmp(&b.publish_date).unwrap());
+        blogs.sort_by(|a, b| b.publish_date.partial_cmp(&a.publish_date).unwrap());
 
         Pages {
             page_list: vec![],
