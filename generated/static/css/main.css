@@ -102,6 +102,15 @@ section h1 {
 	margin-top: 0.2rem;
 }
 
+ul li {
+	padding-top: 16px;
+	font-size: 1.1rem;
+}
+
+ul li.first {
+	padding-top: 0px;
+}
+
 ul li a {
 	text-decoration: underline;
 	color: var(--dark);
@@ -109,6 +118,10 @@ ul li a {
 
 ul li a:visited {
 	color: var(--dark);
+}
+
+footer {
+	height: 64px;
 }
 
 /* Responsive things */
