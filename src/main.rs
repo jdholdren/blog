@@ -4,15 +4,11 @@ use std::io::Cursor;
 
 use fs_extra::dir::CopyOptions;
 use pulldown_cmark::Parser;
-use repo::Repo;
-use rusqlite::Connection;
 
 mod pages;
-mod repo;
 
 fn main() -> Result<()> {
-    // Blow away the db and destination folder
-    fs::remove_file("./db.sqlite").ok();
+    // Blow away the destination folder
     fs::remove_dir_all("./generated").ok();
 
     // Make sure we have a folder to store the generated blog
@@ -24,29 +20,14 @@ fn main() -> Result<()> {
     fs_extra::dir::copy("./static", "./generated", &options)
         .expect("could not copy static assets over");
 
-    // How I'm thinking about this going forward:
-    //
-    // I want to back this with a database for eventual search capability.
-    // But largely this should all be statically generated; there's no need to
-    // re-render the home page when nothing has changed.
-    //
-    // So first steps: parse files into a sqlite db, then start rendering pages
-    // using queries from said database.
-
-    // Build out the database
-    let conn = Connection::open("./db.sqlite").with_context("issue opening db")?;
-    let repo = repo::Repo { conn: &conn };
-
-    repo.setup_tables()?;
-
     // Crawl all layouts and put them in the DB
-    insert_layouts(&repo)?;
+    let ls = layouts()?;
 
     // Crawl all blogposts to insert into the db
-    insert_blogs(&repo)?;
+    let blogs = blogs()?;
 
     // Pages to be generated
-    let mut p = pages::Pages::new(&repo)?;
+    let mut p = pages::Pages::new(blogs, ls);
     p.generate_index()?;
     p.generate_all_posts()?;
     p.generate_sitemap()?;
@@ -57,7 +38,9 @@ fn main() -> Result<()> {
 const LAYOUT_DIR: &str = "./layouts/";
 const LAYOUT_SUFFIX: &str = ".layout.html";
 
-fn insert_layouts(repo: &Repo) -> Result<()> {
+fn layouts() -> Result<pages::Templates> {
+    let mut m: HashMap<String, String> = HashMap::new();
+
     for mut layout in walk_directory(LAYOUT_DIR)? {
         let contents = fs::read_to_string(&layout)?;
 
@@ -66,41 +49,40 @@ fn insert_layouts(repo: &Repo) -> Result<()> {
         layout = layout.replace(LAYOUT_SUFFIX, "");
 
         // Insert it into the db
-        repo.insert_layout(&repo::Layout {
-            id: layout,
-            html: contents,
-        })?;
+        m.insert(layout, contents);
     }
 
-    Ok(())
+    Ok(pages::Templates::new(m))
 }
 
-fn insert_blogs(repo: &Repo) -> Result<()> {
-    for blog in walk_directory("./posts")? {
-        let contents = fs::read_to_string(&blog)?;
-        let mut parser = pulldown_cmark::Parser::new_ext(&contents, pulldown_cmark::Options::all());
+fn blogs() -> Result<Vec<pages::Blog>> {
+    walk_directory("./posts")?
+        .into_iter()
+        .map(|blog_name| {
+            let contents = fs::read_to_string(&blog_name)?;
+            let mut parser =
+                pulldown_cmark::Parser::new_ext(&contents, pulldown_cmark::Options::all());
 
-        // Meta information about the blog
-        let front_matter = parse_frontmatter(&mut parser)
-            .with_context(&format!("could not parse frontmatter for {}", blog))?;
-        let metadata = frontmatter_to_meta(&front_matter);
+            // Meta information about the blog
+            let front_matter = parse_frontmatter(&mut parser)
+                .with_context(&format!("could not parse frontmatter for {}", blog_name))?;
+            let metadata = frontmatter_to_meta(&front_matter);
 
-        let mut bytes = Vec::new();
-        pulldown_cmark::html::write_html(Cursor::new(&mut bytes), parser)?;
-        let html = &String::from_utf8_lossy(&bytes)[..];
+            let mut bytes = Vec::new();
+            pulldown_cmark::html::write_html(Cursor::new(&mut bytes), parser)?;
+            let html = &String::from_utf8_lossy(&bytes)[..];
 
-        // Insert it into the db
-        repo.insert_blog(&repo::Blog {
-            id: blog,
-            title: metadata.title,
-            publish_date: metadata.publish_date,
-            excerpt: metadata.excerpt,
-            html: html.to_string(),
-            slug: metadata.slug,
-        })?;
-    }
-
-    Ok(())
+            // Insert it into the db
+            Ok(pages::Blog {
+                id: blog_name.to_owned(),
+                title: metadata.title,
+                publish_date: metadata.publish_date,
+                excerpt: metadata.excerpt,
+                html: html.to_string(),
+                slug: metadata.slug,
+            })
+        })
+        .collect()
 }
 
 // Produces all files within a directory
