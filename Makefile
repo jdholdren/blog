@@ -1,5 +1,5 @@
 generated:
-	cargo run --release
+	cargo run
 
 clean:
 	rm -rf ./generated
