@@ -20,14 +20,12 @@ fn main() -> Result<()> {
     fs_extra::dir::copy("./static", "./generated", &options)
         .expect("could not copy static assets over");
 
-    // Crawl all layouts and put them in the DB
     let ls = layouts()?;
-
-    // Crawl all blogposts to insert into the db
-    let blogs = blogs()?;
+    let posts = posts()?;
+    let replaceables = replaceables()?;
 
     // Pages to be generated
-    let mut p = pages::Pages::new(blogs, ls);
+    let mut p = pages::Pages::new(posts, ls, replaceables);
     p.generate_index()?;
     p.generate_all_posts()?;
     p.generate_sitemap()?;
@@ -36,6 +34,7 @@ fn main() -> Result<()> {
 }
 
 const LAYOUT_DIR: &str = "./layouts/";
+const REPLACEABLE_DIR: &str = "./replaceable/";
 const LAYOUT_SUFFIX: &str = ".layout.html";
 
 fn layouts() -> Result<pages::Templates> {
@@ -55,7 +54,24 @@ fn layouts() -> Result<pages::Templates> {
     Ok(pages::Templates::new(m))
 }
 
-fn blogs() -> Result<Vec<pages::Blog>> {
+fn replaceables() -> Result<pages::Templates> {
+    let mut m: HashMap<String, String> = HashMap::new();
+
+    for mut layout in walk_directory(REPLACEABLE_DIR)? {
+        let contents = fs::read_to_string(&layout)?;
+
+        // Trim off the folder name (and suffix) to get the layout id
+        layout.replace_range(0..REPLACEABLE_DIR.len(), "");
+        layout = layout.replace(LAYOUT_SUFFIX, "");
+
+        // Insert it into the db
+        m.insert(layout, contents);
+    }
+
+    Ok(pages::Templates::new(m))
+}
+
+fn posts() -> Result<Vec<pages::Blog>> {
     walk_directory("./posts")?
         .into_iter()
         .map(|blog_name| {
@@ -80,6 +96,7 @@ fn blogs() -> Result<Vec<pages::Blog>> {
                 excerpt: metadata.excerpt,
                 html: html.to_string(),
                 slug: metadata.slug,
+                external: metadata.external,
             })
         })
         .collect()
@@ -170,6 +187,7 @@ struct Meta {
     publish_date: String,
     excerpt: String,
     slug: String,
+    external: Option<String>,
 }
 
 fn frontmatter_to_meta(fm: &Frontmatter) -> Meta {
@@ -177,7 +195,8 @@ fn frontmatter_to_meta(fm: &Frontmatter) -> Meta {
         title: fm.get("title").unwrap().to_string(),
         publish_date: fm.get("publishDate").unwrap().to_string(),
         excerpt: fm.get("excerpt").unwrap().to_owned(),
-        slug: fm.get("slug").unwrap().to_owned(),
+        slug: fm.get("slug").unwrap_or(&String::new()).to_owned(),
+        external: fm.get("external").map(|f| f.to_owned()),
     }
 }
 

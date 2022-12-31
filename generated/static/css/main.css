@@ -1,12 +1,15 @@
 /* System-Wide */
 
-html, body {
-	margin: 0px;
+html, body { margin: 0px;
 	font-family: 'Roboto', sans-serif;
-	background: #fff;
+	background: #fffbff;
 
-	--dark: #386a20;
-	--light: #b6f397;
+	--dark: #e8e5ac;
+	--light: #d5e7dc;
+	--black: rgb(0, 0, 0, 0.8);
+	--grey: #f7f3f5;
+	--tan: #e5e3d1;
+	--dark-tan: #626033;
 
 	height: 100%;
 }
@@ -14,6 +17,10 @@ html, body {
 .with-gutter {
 	max-width: 48rem;
 	margin: auto;
+}
+
+header {
+	background: var(--grey);
 }
 
 
@@ -38,9 +45,9 @@ nav.menu {
 	padding-top: 0.5rem;
 	padding-bottom: 0.6rem;
 	height: 1rem;
-	border: 1px solid var(--light);
+	border: 1px solid var(--dark-tan);
 	border-radius: 3rem;
-	background-color: var(--light);
+	background-color: var(--tan);
 	color: rgb(0, 0, 0, 0.8);
 
 	transition: background-color 0.4s;
@@ -48,8 +55,14 @@ nav.menu {
 }
 
 .menu .link:hover {
-	background-color: var(--light);
+	background-color: var(--dark-tan);
+	color: #fff;
 	cursor: pointer;
+}
+
+.menu .link.selected {
+	background-color: var(--dark-tan);
+	color: #fff;
 }
 
 a, a:hover, a:visited {
@@ -58,7 +71,7 @@ a, a:hover, a:visited {
 }
 
 section h1 {
-	color: var(--dark);
+	color: var(--black);
 	font-size: 2.2rem;
 }
 
@@ -113,11 +126,15 @@ ul li.first {
 
 ul li a {
 	text-decoration: underline;
-	color: var(--dark);
+	color: var(--dark-tan);
 }
 
 ul li a:visited {
-	color: var(--dark);
+	color: var(--dark-tan);
+}
+
+.post h1 {
+	margin-top: 0px; 
 }
 
 footer {
