@@ -1,5 +1,6 @@
 use crate::Error;
 use crate::Result;
+use crate::WithMessage;
 
 use regex::Regex;
 use std::collections::HashMap;
@@ -35,32 +36,111 @@ pub struct Blog {
     pub excerpt: String,
     pub html: String,
     pub slug: String,
+    pub external: Option<String>,
 }
 
+fn placeholder_func(f: &str, f_args: Vec<&str>, t_args: &HashMap<&str, String>) -> Result<String> {
+    match f {
+        "val" => {
+            let arg_name = f_args[0];
+            let value = match t_args.get(arg_name) {
+                Some(v) => v,
+                None => {
+                    // This is a no-no: we are grabbing a value not in the template args
+                    return Err(Error::new(&format!(
+                        "could not find argument: {}",
+                        arg_name
+                    )));
+                }
+            };
+            return Ok(value.to_owned());
+        }
+        "opt" => {
+            let value = if t_args.get(f_args[0]).unwrap_or(&String::new()) == "true" {
+                f_args[1]
+            } else {
+                f_args[2]
+            };
+
+            // Need to parse the optional arguments
+            Ok(value.to_owned())
+        }
+        s => Err(Error::new(&format!("unrecognized function: {}", s))),
+    }
+}
+
+// The struct that can render pages given templates and blogs
 pub struct Pages<'a> {
     templates: Templates,
+    repleaceables: Templates,
     blogs: Vec<Blog>,
     page_list: Vec<&'a str>,
 }
 
 impl<'a> Pages<'a> {
-    pub fn new(mut blogs: Vec<Blog>, templates: Templates) -> Pages<'a> {
+    pub fn new(mut blogs: Vec<Blog>, templates: Templates, repleaceables: Templates) -> Pages<'a> {
         blogs.sort_by(|a, b| b.publish_date.partial_cmp(&a.publish_date).unwrap());
 
         Pages {
             page_list: vec![],
             blogs,
             templates,
+            repleaceables,
         }
     }
 
     // Adds the reusable templates to the argments going to any layout
-    fn add_tpls(&'a self, mut args: HashMap<&'a str, &'a str>) -> HashMap<&str, &str> {
-        for (id, template) in &self.templates.0 {
-            args.insert(id, template);
+    fn add_replacebales(
+        &'a self,
+        mut args: HashMap<&'a str, String>,
+    ) -> Result<HashMap<&str, String>> {
+        for (id, template) in &self.repleaceables.0 {
+            let replaced = self
+                .replace_placeholders(template, &args)
+                .with_context(&format!("replacing for template: {}", id))?;
+            args.insert(id, replaced);
         }
 
-        args
+        Ok(args)
+    }
+
+    fn replace_placeholders<'b>(
+        &'a self,
+        layout: &str,
+        args: &HashMap<&'b str, String>,
+    ) -> Result<String> {
+        let mut result = layout.to_owned();
+
+        // Cause we need to do this in reverse order...
+        let mut v = Vec::new();
+
+        // Can use a lazy macro to make this static
+        let re = Regex::new(r"\{\{([a-z_]+)\(([a-z\\,_]+)\)\}\}").unwrap();
+        let caps = re.captures_iter(&result);
+        for cap in caps {
+            let outer_group = cap.get(0).unwrap();
+            println!("out_group: {}", &cap[0]);
+            let (start, end) = (outer_group.start(), outer_group.end());
+
+            let fn_name = &cap[1];
+            let fn_args: Vec<&str> = cap[2].split(",").collect();
+            println!("fn_name: {}, args: {:?}", fn_name, args);
+
+            v.push((placeholder_func(fn_name, fn_args, args)?, start, end));
+        }
+        v.reverse();
+
+        for (value, start, end) in v {
+            result.replace_range(start..end, &value);
+        }
+
+        Ok(result)
+    }
+
+    // Template generators should have to call this, not the other two functions
+    fn render<'b>(&'a self, layout: &str, args: HashMap<&'b str, String>) -> Result<String> {
+        let layout_args = self.add_replacebales(args)?;
+        self.replace_placeholders(layout, &layout_args)
     }
 
     pub fn generate_index(&mut self) -> Result<()> {
@@ -75,10 +155,10 @@ impl<'a> Pages<'a> {
         // Need the template for the page
         let layout = self.templates.find("index")?;
 
-        let mut args: HashMap<&str, &str> = HashMap::new();
-        args.insert("latest_posts", &blogs_arg);
+        let mut args: HashMap<&str, String> = HashMap::new();
+        args.insert("latest_posts", blogs_arg);
 
-        let contents = replace_placeholders(layout, self.add_tpls(args))?;
+        let contents = self.render(layout, args)?;
         let mut f = File::create("./generated/index.html")?;
         f.write_all(contents.as_bytes())?;
 
@@ -90,7 +170,7 @@ impl<'a> Pages<'a> {
     }
 
     pub fn generate_all_posts(&mut self) -> Result<()> {
-        // Need all the blogs to render to a list
+        // Need all the blogs to render to a blurb list
         let blogs = &self.blogs;
 
         let mut blogs_arg = String::new();
@@ -102,10 +182,13 @@ impl<'a> Pages<'a> {
         // Need the template for the page
         let layout = self.templates.find("all_posts")?;
 
-        let mut args: HashMap<&str, &str> = HashMap::new();
-        args.insert("posts", &blogs_arg);
+        let mut args: HashMap<&str, String> = HashMap::new();
+        args.insert("posts", blogs_arg);
+        args.insert("posts_selected", String::from("true"));
 
-        let contents = replace_placeholders(layout, self.add_tpls(args))?;
+        let contents = self
+            .render(layout, args)
+            .with_context("issue replacing placeholders on all blogs page")?;
         std::fs::create_dir_all("./generated/posts")?;
         let mut f = File::create("./generated/posts/index.html")?;
         f.write_all(contents.as_bytes())?;
@@ -113,20 +196,47 @@ impl<'a> Pages<'a> {
         // Add page to sitemap
         self.page_list.push("https://jamesholdren.com/posts");
 
+        // For each blog post, generate its page
+        for blog in blogs.into_iter().filter(|blog| blog.external.is_none()) {
+            let layout = self.templates.find("post")?;
+            let contents = self.render(
+                layout,
+                hashmap! {
+                    "title" => blog.title.to_owned(),
+                    "description" => blog.excerpt.to_owned(),
+                    "publish_date" => blog.publish_date.to_owned(),
+                    "contents" => blog.html.to_owned(),
+                },
+            )?;
+            std::fs::create_dir_all(format!("./generated/posts/{}", blog.slug))?;
+            let mut f = File::create(format!("./generated/posts/{}/index.html", blog.slug))?;
+            f.write_all(contents.as_bytes())?;
+        }
+
         Ok(())
     }
 
     // Converts a blog post to a short excerpt string
     fn blog_to_blurb(&self, b: &Blog) -> Result<String> {
         // Get the layout for the blurb
-        let layout = self.templates.find("blurb")?;
-        replace_placeholders(
+        let layout = self
+            .templates
+            .find("blurb")
+            .with_context("finding blurb from repleaceables")?;
+
+        // Use the external link or slug it out
+        let link = b
+            .external
+            .to_owned()
+            .unwrap_or(format!("/posts/{}/", b.slug));
+
+        self.render(
             layout,
             hashmap! {
-                "title" => b.title.as_str(),
-                "excerpt" => b.excerpt.as_str(),
-                "publish_date" => b.publish_date.as_str(),
-                "link" => b.slug.as_str(),
+                "title" => b.title.to_owned(),
+                "excerpt" => b.excerpt.to_owned(),
+                "publish_date" => b.publish_date.to_owned(),
+                "link" => link,
             },
         )
     }
@@ -140,38 +250,4 @@ impl<'a> Pages<'a> {
 
         Ok(())
     }
-}
-
-fn replace_placeholders(layout: &str, args: HashMap<&str, &str>) -> Result<String> {
-    let mut result = layout.to_owned();
-
-    // Cause we need to do this in reverse order...
-    let mut v = Vec::new();
-
-    // Can use a lazy macro to make this static
-    let re = Regex::new(r"\{\{([a-z._]+)\}\}").unwrap();
-    let caps = re.captures_iter(&result);
-    for cap in caps {
-        let outer_group = cap.get(0).unwrap();
-        let (start, end) = (outer_group.start(), outer_group.end());
-
-        let inner_group = cap
-            .get(1)
-            .map_or(String::from(""), |f| f.as_str().to_owned());
-
-        v.push((inner_group, start, end));
-    }
-    v.reverse();
-
-    for (name, start, end) in v {
-        // First see if we have that value in `args`
-        let value = match args.get(&*name) {
-            Some(val) => val,
-            None => return Err(Error::new(&format!("could not find argument: {}", name))),
-        };
-
-        result.replace_range(start..end, value);
-    }
-
-    Ok(result)
 }
