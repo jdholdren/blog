@@ -53,7 +53,7 @@ fn placeholder_func(f: &str, f_args: Vec<&str>, t_args: &HashMap<&str, String>) 
                     )));
                 }
             };
-            return Ok(value.to_owned());
+            Ok(value.to_owned())
         }
         "opt" => {
             let value = if t_args.get(f_args[0]).unwrap_or(&String::new()) == "true" {
@@ -119,12 +119,10 @@ impl<'a> Pages<'a> {
         let caps = re.captures_iter(&result);
         for cap in caps {
             let outer_group = cap.get(0).unwrap();
-            println!("out_group: {}", &cap[0]);
             let (start, end) = (outer_group.start(), outer_group.end());
 
             let fn_name = &cap[1];
-            let fn_args: Vec<&str> = cap[2].split(",").collect();
-            println!("fn_name: {}, args: {:?}", fn_name, args);
+            let fn_args: Vec<&str> = cap[2].split(',').collect();
 
             v.push((placeholder_func(fn_name, fn_args, args)?, start, end));
         }
@@ -197,7 +195,7 @@ impl<'a> Pages<'a> {
         self.page_list.push("https://jamesholdren.com/posts");
 
         // For each blog post, generate its page
-        for blog in blogs.into_iter().filter(|blog| blog.external.is_none()) {
+        for blog in blogs.iter().filter(|blog| blog.external.is_none()) {
             let layout = self.templates.find("post")?;
             let contents = self.render(
                 layout,
