@@ -10,7 +10,7 @@ slug: go-garden
 This is my curated list of Go links to talks, tutorials, articles, and other
 things that have impacted my learning of this wonderful language.
 While this is a post, expect it to be maintained regularly.
-If you want to suggest a link, please open an issue [here](https://github.com/jdholdren/blog/issues/new).
+If you want to suggest a link, please [open an issue](https://github.com/jdholdren/blog/issues/new).
 
 # Getting started
 
