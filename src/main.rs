@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Context, Result};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Cursor;
@@ -81,7 +82,7 @@ fn posts() -> Result<Vec<pages::Blog>> {
 
             // Meta information about the blog
             let front_matter = parse_frontmatter(&mut parser)
-                .with_context(&format!("could not parse frontmatter for {}", blog_name))?;
+                .with_context(|| format!("could not parse frontmatter for {}", blog_name))?;
             let metadata = frontmatter_to_meta(&front_matter);
 
             let mut bytes = Vec::new();
@@ -106,7 +107,7 @@ fn posts() -> Result<Vec<pages::Blog>> {
 fn walk_directory(dir: &str) -> Result<Vec<String>> {
     let mut files: Vec<String> = vec![];
 
-    for entry in fs::read_dir(dir).with_context("error reading dir")? {
+    for entry in fs::read_dir(dir).context("error reading dir")? {
         let entry = entry?;
         let path = entry.path().to_str().unwrap().to_string();
 
@@ -146,7 +147,7 @@ fn parse_frontmatter(parser: &mut Parser) -> Result<Frontmatter> {
                 }
                 pulldown_cmark::Event::SoftBreak => {}
                 _ => {
-                    return Err(Error::new("frontmatter not found"));
+                    return Err(anyhow!("frontmatter not found"));
                 }
             }
         }
@@ -199,72 +200,3 @@ fn frontmatter_to_meta(fm: &Frontmatter) -> Meta {
         external: fm.get("external").map(|f| f.to_owned()),
     }
 }
-
-// Defining a custom error message
-#[derive(Debug)]
-pub struct Error {
-    context: String,
-    inner_msg: String,
-}
-
-impl Error {
-    fn new(msg: &str) -> Error {
-        Error {
-            context: String::new(),
-            inner_msg: msg.to_string(),
-        }
-    }
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}: {}", self.context, self.inner_msg)
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl From<rusqlite::Error> for Error {
-    fn from(rusql_err: rusqlite::Error) -> Self {
-        Error {
-            context: String::new(),
-            inner_msg: rusql_err.to_string(),
-        }
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(io_err: std::io::Error) -> Self {
-        Error {
-            context: String::new(),
-            inner_msg: io_err.to_string(),
-        }
-    }
-}
-
-impl From<regex::Error> for Error {
-    fn from(re_err: regex::Error) -> Self {
-        Error {
-            context: String::new(),
-            inner_msg: re_err.to_string(),
-        }
-    }
-}
-
-pub trait WithMessage<T> {
-    fn with_context(self, context: &str) -> Result<T>;
-}
-
-impl<T, E: std::error::Error> WithMessage<T> for std::result::Result<T, E> {
-    fn with_context(self, msg: &str) -> Result<T> {
-        match self {
-            Ok(val) => Ok(val), // Just pass it through
-            Err(err) => Err(Error {
-                context: msg.to_string(),
-                inner_msg: err.to_string(),
-            }),
-        }
-    }
-}
-
-type Result<T> = std::result::Result<T, Error>;

@@ -1,6 +1,4 @@
-use crate::Error;
-use crate::Result;
-use crate::WithMessage;
+use anyhow::{anyhow, Context, Result};
 
 use regex::Regex;
 use std::collections::HashMap;
@@ -20,10 +18,7 @@ impl Templates {
     fn find(&self, id: &str) -> Result<&str> {
         match self.0.get(id) {
             Some(tpl) => Ok(tpl),
-            None => Err(Error::new(&format!(
-                "unable to find template named '{}'",
-                id
-            ))),
+            None => Err(anyhow!("unable to find template named '{}'", id)),
         }
     }
 }
@@ -47,10 +42,7 @@ fn placeholder_func(f: &str, f_args: Vec<&str>, t_args: &HashMap<&str, String>) 
                 Some(v) => v,
                 None => {
                     // This is a no-no: we are grabbing a value not in the template args
-                    return Err(Error::new(&format!(
-                        "could not find argument: {}",
-                        arg_name
-                    )));
+                    return Err(anyhow!("could not find argument: {}", arg_name));
                 }
             };
             Ok(value.to_owned())
@@ -65,7 +57,7 @@ fn placeholder_func(f: &str, f_args: Vec<&str>, t_args: &HashMap<&str, String>) 
             // Need to parse the optional arguments
             Ok(value.to_owned())
         }
-        s => Err(Error::new(&format!("unrecognized function: {}", s))),
+        s => Err(anyhow!("unrecognized function: {}", s)),
     }
 }
 
@@ -97,7 +89,7 @@ impl<'a> Pages<'a> {
         for (id, template) in &self.repleaceables.0 {
             let replaced = self
                 .replace_placeholders(template, &args)
-                .with_context(&format!("replacing for template: {}", id))?;
+                .with_context(|| format!("replacing for template: {}", id))?;
             args.insert(id, replaced);
         }
 
@@ -186,7 +178,7 @@ impl<'a> Pages<'a> {
 
         let contents = self
             .render(layout, args)
-            .with_context("issue replacing placeholders on all blogs page")?;
+            .context("issue replacing placeholders on all blogs page")?;
         std::fs::create_dir_all("./generated/posts")?;
         let mut f = File::create("./generated/posts/index.html")?;
         f.write_all(contents.as_bytes())?;
@@ -220,7 +212,7 @@ impl<'a> Pages<'a> {
         let layout = self
             .templates
             .find("blurb")
-            .with_context("finding blurb from repleaceables")?;
+            .context("finding blurb from repleaceables")?;
 
         // Use the external link or slug it out
         let link = b
