@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{bail, Context, Result};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Cursor;
@@ -147,7 +147,7 @@ fn parse_frontmatter(parser: &mut Parser) -> Result<Frontmatter> {
                 }
                 pulldown_cmark::Event::SoftBreak => {}
                 _ => {
-                    return Err(anyhow!("frontmatter not found"));
+                    bail!("frontmatter not found");
                 }
             }
         }
