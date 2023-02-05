@@ -12,3 +12,4 @@ pulldown-cmark = { version = "0.9.2", default-features = false }
 maplit = "1.0.2"
 fs_extra = "1.2.0"
 anyhow = "1.0.68"
+lazy_static = "1.4.0"

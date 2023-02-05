@@ -40,6 +40,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "fs_extra",
+ "lazy_static",
  "maplit",
  "pulldown-cmark",
  "regex",
@@ -104,6 +105,12 @@ checksum = "7249a3129cbc1ffccd74857f81464a323a152173cdb134e0fd81bc803b29facf"
 dependencies = [
  "hashbrown",
 ]
+
+[[package]]
+name = "lazy_static"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
