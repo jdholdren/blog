@@ -64,7 +64,7 @@ impl Renderer {
                 let arg_name = f_args[0];
                 let value = t_args
                     .get(arg_name)
-                    .ok_or(anyhow!("could not find argument: {}", arg_name))?;
+                    .ok_or_else(|| anyhow!("could not find argument: {}", arg_name))?;
                 Ok(value.to_owned())
             }
             "opt" => {
