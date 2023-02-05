@@ -20,14 +20,14 @@ pub struct Blog {
 }
 
 // The struct that can render pages given templates and blogs
-pub struct Pages<'a> {
+pub struct Pages {
     renderer: layout::Renderer,
     blogs: Vec<Blog>,
-    page_list: Vec<&'a str>,
+    page_list: Vec<String>,
 }
 
-impl<'a> Pages<'a> {
-    pub fn new(mut blogs: Vec<Blog>, renderer: layout::Renderer) -> Pages<'a> {
+impl Pages {
+    pub fn new(mut blogs: Vec<Blog>, renderer: layout::Renderer) -> Self {
         blogs.sort_by(|a, b| b.publish_date.partial_cmp(&a.publish_date).unwrap());
 
         Pages {
@@ -55,7 +55,7 @@ impl<'a> Pages<'a> {
 
         // Add the page for the sitelist
         // TODO: Don't hardcode this? eh idk
-        self.page_list.push("https://jamesholdren.com");
+        self.page_list.push("https://jamesholdren.com".to_string());
 
         Ok(())
     }
@@ -82,7 +82,8 @@ impl<'a> Pages<'a> {
         f.write_all(contents.as_bytes())?;
 
         // Add page to sitemap
-        self.page_list.push("https://jamesholdren.com/posts");
+        self.page_list
+            .push("https://jamesholdren.com/posts".to_string());
 
         // For each blog post, generate its page
         for blog in self.blogs.iter().filter(|blog| blog.external.is_none()) {
@@ -98,6 +99,10 @@ impl<'a> Pages<'a> {
             std::fs::create_dir_all(format!("./generated/posts/{}", blog.slug))?;
             let mut f = File::create(format!("./generated/posts/{}/index.html", blog.slug))?;
             f.write_all(contents.as_bytes())?;
+
+            // Add the post to the sitemap
+            self.page_list
+                .push(format!("https://jamesholdren.com/posts/{}", blog.slug));
         }
 
         Ok(())
@@ -126,7 +131,7 @@ impl<'a> Pages<'a> {
     pub fn generate_sitemap(&self) -> Result<()> {
         let mut f = File::create("./generated/sitemap.txt")?;
         for page in &self.page_list {
-            write!(f, "{}", page)?;
+            writeln!(f, "{}", page)?;
         }
 
         Ok(())

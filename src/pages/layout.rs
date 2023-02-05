@@ -17,7 +17,7 @@ impl Renderer {
         let mut result = self
             .templates
             .get(layout_name)
-            .ok_or(anyhow!("cannot find template '{}'", layout_name))?
+            .ok_or_else(|| anyhow!("cannot find template '{}'", layout_name))?
             .clone(); // Copy the template so we work on a fresh one
 
         // Cause we need to do this in reverse order...
@@ -30,7 +30,9 @@ impl Renderer {
         let caps = PLACEHOLDER_REGEX.captures_iter(&result);
         for cap in caps {
             // For ecah capture, we need to get the value of it, and then where it starts and stops
-            let outer_group = cap.get(0).ok_or(anyhow!("unable to get 0 capture"))?;
+            let outer_group = cap
+                .get(0)
+                .ok_or_else(|| anyhow!("unable to get 0 capture"))?;
             let (start, end) = (outer_group.start(), outer_group.end());
 
             let fn_name = &cap[1];
