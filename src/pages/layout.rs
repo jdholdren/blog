@@ -81,7 +81,7 @@ impl Renderer {
                 // Hello, recursion, it's another template inside of this one
                 let layout_name = f_args[0];
                 self.render_layout(layout_name, t_args)
-                    .with_context(|| format!("error rendering sub-template: {}", layout_name))
+                    .with_context(|| format!("error rendering sub-template: {layout_name}"))
             }
             s => Err(anyhow!("unrecognized function: {}", s)),
         }

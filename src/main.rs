@@ -64,7 +64,7 @@ fn posts() -> Result<Vec<pages::Blog>> {
 
             // Meta information about the blog
             let front_matter = parse_frontmatter(&mut parser)
-                .with_context(|| format!("could not parse frontmatter for {}", blog_name))?;
+                .with_context(|| format!("could not parse frontmatter for {blog_name}"))?;
             let metadata = frontmatter_to_meta(&front_matter);
 
             let mut bytes = Vec::new();
