@@ -131,7 +131,7 @@ impl Pages {
     pub fn generate_sitemap(&self) -> Result<()> {
         let mut f = File::create("./generated/sitemap.txt")?;
         for page in &self.page_list {
-            writeln!(f, "{}", page)?;
+            writeln!(f, "{page}")?;
         }
 
         Ok(())
