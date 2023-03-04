@@ -83,7 +83,7 @@ impl Pages {
 
         // Add page to sitemap
         self.page_list
-            .push("https://jamesholdren.com/posts".to_string());
+            .push("https://jamesholdren.com/posts/".to_string());
 
         // For each blog post, generate its page
         for blog in self.blogs.iter().filter(|blog| blog.external.is_none()) {
@@ -96,13 +96,13 @@ impl Pages {
                     "contents" => blog.html.to_owned(),
                 },
             )?;
-            std::fs::create_dir_all(format!("./generated/posts/{}", blog.slug))?;
+            std::fs::create_dir_all(format!("./generated/posts/{}/", blog.slug))?;
             let mut f = File::create(format!("./generated/posts/{}/index.html", blog.slug))?;
             f.write_all(contents.as_bytes())?;
 
             // Add the post to the sitemap
             self.page_list
-                .push(format!("https://jamesholdren.com/posts/{}", blog.slug));
+                .push(format!("https://jamesholdren.com/posts/{}/", blog.slug));
         }
 
         Ok(())
