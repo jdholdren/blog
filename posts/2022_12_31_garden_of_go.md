@@ -91,3 +91,16 @@ gives some answers.
 
 David Crawshaw shows us all how to keep it simple with boring technology: a love
 of SQLite and Go.
+
+# Architecture
+
+## [Go Structure Examples](https://github.com/katzien/go-structure-examples)
+
+Kat Zien tours different ways to not only structure Go applications, but ways to
+think about structuring components in general.
+
+## [How I write HTTP services after eight years](https://pace.dev/blog/2018/05/09/how-I-write-http-services-after-eight-years.html)
+
+A great post from Mat Ryer on how to evolve an application from simple to
+complex without immediately jumping to layers of indirection like unecessary
+interfaces.
