@@ -1,10 +1,21 @@
 use anyhow::{bail, Context, Result};
+use pulldown_cmark::CodeBlockKind;
+use pulldown_cmark::CowStr;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fs;
-use std::io::Cursor;
+use syntect::highlighting::Theme;
 
 use fs_extra::dir::CopyOptions;
+use pulldown_cmark::html;
+use pulldown_cmark::Event;
 use pulldown_cmark::Parser;
+use pulldown_cmark::Tag;
+
+// Syntax highlighting deps
+use syntect::highlighting::ThemeSet;
+use syntect::html::highlighted_html_for_string;
+use syntect::parsing::SyntaxSet;
 
 mod pages;
 
@@ -55,34 +66,89 @@ fn layouts() -> Result<HashMap<String, String>> {
 }
 
 fn posts() -> Result<Vec<pages::Blog>> {
+    let ss = SyntaxSet::load_defaults_newlines();
+    let ts = ThemeSet::load_defaults();
+    let theme = &ts.themes["base16-ocean.dark"];
+
     walk_directory("./posts")?
         .into_iter()
         .map(|blog_name| {
             let contents = fs::read_to_string(&blog_name)?;
-            let mut parser =
-                pulldown_cmark::Parser::new_ext(&contents, pulldown_cmark::Options::all());
-
-            // Meta information about the blog
-            let front_matter = parse_frontmatter(&mut parser)
-                .with_context(|| format!("could not parse frontmatter for {blog_name}"))?;
-            let metadata = frontmatter_to_meta(&front_matter);
-
-            let mut bytes = Vec::new();
-            pulldown_cmark::html::write_html(Cursor::new(&mut bytes), parser)?;
-            let html = &String::from_utf8_lossy(&bytes)[..];
-
-            // Insert it into the db
-            Ok(pages::Blog {
-                id: blog_name,
-                title: metadata.title,
-                publish_date: metadata.publish_date,
-                excerpt: metadata.excerpt,
-                html: html.to_string(),
-                slug: metadata.slug,
-                external: metadata.external,
-            })
+            render_blog(blog_name, contents, &ss, theme)
         })
         .collect()
+}
+
+// Performs all the logic for parsing a blog post into its HTML
+fn render_blog(
+    blog_name: String,
+    contents: String,
+    ss: &SyntaxSet,
+    theme: &Theme,
+) -> Result<pages::Blog> {
+    let mut parser = pulldown_cmark::Parser::new_ext(&contents, pulldown_cmark::Options::all());
+
+    // Meta information about the blog
+    let front_matter = parse_frontmatter(&mut parser)
+        .with_context(|| format!("could not parse frontmatter for {blog_name}"))?;
+    let metadata = frontmatter_to_meta(&front_matter);
+
+    // This stores events we've already gone through
+    let mut events = Vec::new();
+    // The string we need to highlight
+    let mut to_highlight = String::new();
+    // Loop through and handle specifically entering/exiting and being with a code block
+    let mut in_code_block = false;
+    let mut syntax = ss.find_syntax_plain_text();
+    for event in parser {
+        match event {
+            Event::Start(Tag::CodeBlock(kind)) => {
+                in_code_block = true;
+
+                // Determine the syntax set from the information in the start event
+                if let CodeBlockKind::Fenced(language) = kind {
+                    syntax = ss.find_syntax_by_extension(&language).unwrap();
+                }
+            }
+            Event::Text(t) => {
+                if in_code_block {
+                    // If we're in a code block, build up the string of text
+                    to_highlight.push_str(&t);
+                    continue;
+                }
+                events.push(Event::Text(t)) // Just forward the event through
+            }
+            Event::End(Tag::CodeBlock(_)) => {
+                if !in_code_block {
+                    continue;
+                }
+
+                let html = highlighted_html_for_string(&to_highlight, &ss, &syntax, &theme)?;
+                // I'm missing something here for sure, but CowStr does implement From Cow<str>
+                let c = Into::<CowStr>::into(Cow::<str>::Owned(html));
+                events.push(Event::Html(c));
+                to_highlight = String::new();
+                in_code_block = false;
+            }
+            e => {
+                events.push(e);
+            }
+        }
+    }
+
+    let mut html_str = String::new();
+    html::push_html(&mut html_str, events.into_iter());
+
+    // Insert it into the db
+    Ok(pages::Blog {
+        id: blog_name,
+        title: metadata.title,
+        publish_date: metadata.publish_date,
+        excerpt: metadata.excerpt,
+        html: html_str,
+        slug: metadata.slug,
+        external: metadata.external,
+    })
 }
 
 // Produces all files within a directory
