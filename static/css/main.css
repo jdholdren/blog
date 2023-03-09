@@ -156,6 +156,12 @@ footer {
 	height: 64px;
 }
 
+pre {
+	padding: 16px;
+	font-family: 'Roboto Mono', sans-serif;
+	border-radius: 8px;
+}
+
 /* Responsive things */
 
 @media screen and (max-width: 800px) {
