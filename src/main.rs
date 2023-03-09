@@ -123,7 +123,7 @@ fn render_blog(
                     continue;
                 }
 
-                let html = highlighted_html_for_string(&to_highlight, &ss, &syntax, &theme)?;
+                let html = highlighted_html_for_string(&to_highlight, ss, syntax, theme)?;
                 // I'm missing something here for sure, but CowStr does implement From Cow<str>
                 let c = Into::<CowStr>::into(Cow::<str>::Owned(html));
                 events.push(Event::Html(c));
