@@ -68,7 +68,7 @@ fn layouts() -> Result<HashMap<String, String>> {
 fn posts() -> Result<Vec<pages::Blog>> {
     let ss = SyntaxSet::load_defaults_newlines();
     let ts = ThemeSet::load_defaults();
-    let theme = &ts.themes["base16-ocean.dark"];
+    let theme = &ts.themes["base16-eighties.dark"];
 
     walk_directory("./posts")?
         .into_iter()
