@@ -2,7 +2,7 @@
 
 html, body { margin: 0px;
 	font-family: 'Roboto', sans-serif;
-	background: #fffbff;
+	background: #fff;
 
 	--dark: #5b7063;
 	--light: #d5e7dc;
@@ -20,9 +20,10 @@ html, body { margin: 0px;
 }
 
 header {
-	background: var(--grey);
+	height: 6rem;
+	padding-left: 2rem;
+	padding-right: 2rem;
 }
-
 
 nav.menu {
 	display: flex;
@@ -30,13 +31,13 @@ nav.menu {
 	column-gap: 0.7rem;
 	align-items: center;
 
-	height: 5rem;
+	height: 6rem;
 }
 
 .menu .name {
 	margin-right: 2rem;
 	font-weight: bold;
-	font-size: 1.2rem;
+	font-size: 1.7rem;
 }
 
 .menu .link {
@@ -78,8 +79,10 @@ section h1 {
 
 .blog_blurb {
 	color: rgb(0, 0, 0, 0.8);
-	padding: 1.5rem;
-	transition: background-color 0.3s;
+	padding-top: 1.5rem;
+	padding-bottom: 1.5rem;
+	padding-left: 1rem;
+	padding-right: 1rem;
 	border-radius: 18px;
 }
 
@@ -90,6 +93,7 @@ section h1 {
 
 .blog_blurb .publish-date {
 	font-weight: bold;
+	color: var(--dark);
 }
 
 .blog_blurb h2 {
@@ -167,6 +171,11 @@ pre {
 @media screen and (max-width: 800px) {
 	.with-gutter {
 		padding-left: 16px;				
+		padding-right: 16px;
+	}
+
+	header {
+		padding-left: 16px;
 		padding-right: 16px;
 	}
 

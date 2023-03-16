@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use chrono::NaiveDate;
 use maplit::hashmap;
 use std::collections::HashMap;
 use std::fs::File;
@@ -12,7 +13,8 @@ pub use layout::Renderer;
 pub struct Blog {
     pub id: String,
     pub title: String,
-    pub publish_date: String,
+    pub publish_date: NaiveDate,
+    pub display_date: String,
     pub excerpt: String,
     pub html: String,
     pub slug: String,
@@ -92,7 +94,7 @@ impl Pages {
                 &hashmap! {
                     "title" => blog.title.to_owned(),
                     "description" => blog.excerpt.to_owned(),
-                    "publish_date" => blog.publish_date.to_owned(),
+                    "publish_date" => blog.display_date.to_owned(),
                     "contents" => blog.html.to_owned(),
                 },
             )?;
@@ -121,7 +123,7 @@ impl Pages {
             &hashmap! {
                 "title" => b.title.to_owned(),
                 "excerpt" => b.excerpt.to_owned(),
-                "publish_date" => b.publish_date.to_owned(),
+                "publish_date" => b.display_date.to_owned(),
                 "link" => link,
             },
         )
