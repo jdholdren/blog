@@ -1,4 +1,5 @@
 use anyhow::{bail, Context, Result};
+use chrono::NaiveDate;
 use pulldown_cmark::CodeBlockKind;
 use pulldown_cmark::CowStr;
 use std::borrow::Cow;
@@ -144,6 +145,7 @@ fn render_blog(
         id: blog_name,
         title: metadata.title,
         publish_date: metadata.publish_date,
+        display_date: metadata.display_date,
         excerpt: metadata.excerpt,
         html: html_str,
         slug: metadata.slug,
@@ -233,16 +235,21 @@ fn parse_frontmatter(parser: &mut Parser) -> Result<Frontmatter> {
 
 struct Meta {
     title: String,
-    publish_date: String,
+    publish_date: NaiveDate,
+    display_date: String,
     excerpt: String,
     slug: String,
     external: Option<String>,
 }
 
 fn frontmatter_to_meta(fm: &Frontmatter) -> Meta {
+    let publish_date_str = fm.get("publishDate").unwrap().to_string();
+    let publish_date = NaiveDate::parse_from_str(&publish_date_str, "%Y-%m-%d").unwrap();
+
     Meta {
         title: fm.get("title").unwrap().to_string(),
-        publish_date: fm.get("publishDate").unwrap().to_string(),
+        publish_date,
+        display_date: publish_date.format("%B %-d, %C%y").to_string(),
         excerpt: fm.get("excerpt").unwrap().to_owned(),
         slug: fm.get("slug").unwrap_or(&String::new()).to_owned(),
         external: fm.get("external").map(|f| f.to_owned()),
