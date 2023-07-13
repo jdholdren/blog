@@ -20,7 +20,6 @@ impl Renderer {
             .ok_or_else(|| anyhow!("cannot find template '{}'", layout_name))?
             .clone(); // Copy the template so we work on a fresh one
 
-        // Cause we need to do this in reverse order...
         let mut v: Vec<(String, usize, usize)> = Vec::new();
 
         lazy_static! {
@@ -39,13 +38,14 @@ impl Renderer {
             let fn_args: Vec<&str> = cap[2].split(',').collect();
 
             v.push((
-                self.replace_placeholder(fn_name, fn_args, args)?,
+                self.apply_placeholder_function(fn_name, fn_args, args)?,
                 start,
                 end,
             ));
         }
-        v.reverse();
 
+        // We need to replace the captures in reverse order so the indexes are stable as we loop
+        v.reverse();
         for (value, start, end) in v {
             result.replace_range(start..end, &value);
         }
@@ -53,7 +53,8 @@ impl Renderer {
         Ok(result)
     }
 
-    fn replace_placeholder(
+    // Translates a placeholder function into a string value
+    fn apply_placeholder_function(
         &self,
         f: &str,
         f_args: Vec<&str>,
