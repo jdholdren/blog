@@ -1,5 +1,7 @@
 use anyhow::{bail, Context, Result};
 use chrono::NaiveDate;
+use clap::Arg;
+use clap::Command;
 use pulldown_cmark::CodeBlockKind;
 use pulldown_cmark::CowStr;
 use std::borrow::Cow;
@@ -13,6 +15,12 @@ use pulldown_cmark::Event;
 use pulldown_cmark::Parser;
 use pulldown_cmark::Tag;
 
+use axum::{handler::HandlerWithoutStateExt, http::StatusCode, Router};
+use notify::RecursiveMode;
+use std::net::SocketAddr;
+use std::path::Path;
+use tower_http::services::ServeDir;
+
 // Syntax highlighting deps
 use syntect::highlighting::ThemeSet;
 use syntect::html::highlighted_html_for_string;
@@ -20,7 +28,114 @@ use syntect::parsing::SyntaxSet;
 
 mod pages;
 
-fn main() -> Result<()> {
+fn cli() -> Command {
+    Command::new("jdh-blob")
+        .version("0.1.0")
+        .author("James Holdren <jamesdholdren@gmail.com>")
+        .about("Generates the static site for my blog")
+        .subcommand_required(true)
+        .subcommand(
+            Command::new("generate")
+                .about("generates the blog into static files located in the `generated` folder"),
+        )
+        .subcommand(
+            Command::new("watch")
+            .about("Watches the non-rust directories and immediately regenerates the site on change. Also serves the generated folder on localhost")
+            .arg(Arg::new("port").default_value("4444")),
+            )
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    match cli().get_matches().subcommand() {
+        Some(("generate", _matches)) => generate_site()?,
+        Some(("watch", matches)) => {
+            let port: u16 = matches
+                .get_one::<String>("port")
+                .expect("port is required")
+                .parse()
+                .expect("port is invalid");
+
+            watch_and_serve(port)
+                .await
+                .expect("error watching and serving");
+        }
+        _ => unreachable!("clap should ensure we don't get here"),
+    };
+
+    Ok(())
+}
+
+// Command handler for watching the non-rust directories and triggers a regeneration.
+// Also starts a server on the specified port.
+async fn watch_and_serve(port: u16) -> Result<()> {
+    let res = tokio::try_join!(serve_generated_dir(port), watch_dirs());
+    if let Some(e) = res.err() {
+        return Err(e);
+    }
+
+    Ok(())
+}
+
+use notify_debouncer_mini::{new_debouncer, DebounceEventResult};
+use std::time::Duration;
+
+async fn watch_dirs() -> Result<()> {
+    let mut watcher =
+        new_debouncer(
+            Duration::from_secs(3),
+            None,
+            |res: DebounceEventResult| match res {
+                Ok(_) => generate_site().expect("error regenerating site"),
+                Err(e) => println!("Error {:?}", e),
+            },
+        )
+        .unwrap();
+
+    // Watch anything html/css/md-like
+    watcher
+        .watcher()
+        .watch(Path::new("./static/"), RecursiveMode::Recursive)?;
+    watcher
+        .watcher()
+        .watch(Path::new("./posts/"), RecursiveMode::Recursive)?;
+    watcher
+        .watcher()
+        .watch(Path::new("./layouts/"), RecursiveMode::Recursive)?;
+
+    // Need to block here so the watches are not dropped, so block for a while
+    tokio::time::sleep(Duration::from_secs(68719476734)).await;
+
+    Ok(())
+}
+
+async fn serve_generated_dir(port: u16) -> Result<()> {
+    // initialize tracing
+    tracing_subscriber::fmt::init();
+
+    async fn handle_404() -> (StatusCode, &'static str) {
+        (StatusCode::NOT_FOUND, "Not found")
+    }
+
+    // you can convert handler function to service
+    let service = handle_404.into_service();
+
+    let serve_dir = ServeDir::new("./generated/").not_found_service(service);
+
+    // Does the general serving of files in our directory
+    let r = Router::new().fallback_service(serve_dir);
+
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    tracing::debug!("listening on {}", addr);
+    axum::Server::bind(&addr)
+        .serve(r.into_make_service())
+        .await
+        .context("error running server")
+}
+
+fn generate_site() -> Result<()> {
+    println!("starting site generation...");
+
     // Blow away the destination folder
     fs::remove_dir_all("./generated").ok();
 
@@ -42,6 +157,8 @@ fn main() -> Result<()> {
     p.generate_index()?;
     p.generate_all_posts()?;
     p.generate_sitemap()?;
+
+    println!("site generation done!");
 
     Ok(())
 }
