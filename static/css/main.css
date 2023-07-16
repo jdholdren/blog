@@ -18,7 +18,7 @@ html, body { margin: 0px;
 }
 
 .with-gutter {
-	max-width: 48rem;
+	max-width: 40rem;
 	margin: auto;
 }
 
@@ -94,7 +94,7 @@ section h1 {
 	cursor: pointer;
 }
 
-.blog_blurb .publish-date {
+.publish-date {
 	font-weight: bold;
 	color: var(--dark);
 }
@@ -146,7 +146,7 @@ ul li a:visited {
 }
 
 .post .post-title  {
-	margin-top: 1.5rem; 
+	margin-top: 0.2rem; 
 	font-size: 2.5rem;
 }
 
