@@ -110,6 +110,7 @@ section h1 {
 	color: rgb(0, 0, 0, 0.8);
 	padding: 1.5rem;
 	transition: background-color 0.3s;
+    margin-left: -1.5rem;
 	border-radius: 18px;
 }
 
