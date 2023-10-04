@@ -134,8 +134,6 @@ async fn serve_generated_dir(port: u16) -> Result<()> {
 }
 
 fn generate_site() -> Result<()> {
-    println!("starting site generation...");
-
     // Blow away the destination folder
     fs::remove_dir_all("./generated").ok();
 
@@ -151,14 +149,7 @@ fn generate_site() -> Result<()> {
     let ls = layouts()?;
     let posts = posts()?;
 
-    let mut p = pages::Pages::new(posts, pages::Renderer::new(ls));
-
-    // Pages to be generated
-    p.generate_index()?;
-    p.generate_all_posts()?;
-    p.generate_sitemap()?;
-
-    println!("site generation done!");
+    pages::generate_all(posts, pages::Renderer::new(ls));
 
     Ok(())
 }

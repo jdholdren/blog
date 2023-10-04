@@ -8,6 +8,7 @@ pub struct Renderer {
 }
 
 impl Renderer {
+    // Constructs a new renderer with a bunch of templates mapped into it.
     pub fn new(templates: HashMap<String, String>) -> Self {
         Self { templates }
     }

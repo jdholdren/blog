@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use chrono::NaiveDate;
 use maplit::hashmap;
 use std::collections::HashMap;
@@ -21,75 +20,76 @@ pub struct Blog {
     pub external: Option<String>,
 }
 
-// The struct that can render pages given templates and blogs
-pub struct Pages {
-    renderer: layout::Renderer,
-    blogs: Vec<Blog>,
-    page_list: Vec<String>,
+// A step of making the site:
+// Gets access to a list of blogs and the renderer.
+type GenerationStep = dyn FnOnce(&Vec<Blog>, &layout::Renderer) -> Vec<String>;
+
+pub fn generate_all(mut blogs: Vec<Blog>, renderer: layout::Renderer) {
+    blogs.sort_by(|a, b| b.publish_date.partial_cmp(&a.publish_date).unwrap());
+    // The pages we've built to put into the sitemap at the end
+    let mut page_list: Vec<String> = vec![];
+    let steps: Vec<Box<GenerationStep>> =
+        vec![Box::new(generate_index), Box::new(generate_all_posts)];
+
+    for step in steps {
+        let made_pages = step(&blogs, &renderer);
+        for page in made_pages {
+            page_list.push(page)
+        }
+    }
+
+    // Cap it off with the sitelist
+    generate_sitemap(page_list)
 }
 
-impl Pages {
-    pub fn new(mut blogs: Vec<Blog>, renderer: layout::Renderer) -> Self {
-        blogs.sort_by(|a, b| b.publish_date.partial_cmp(&a.publish_date).unwrap());
+fn generate_index(blogs: &Vec<Blog>, r: &layout::Renderer) -> Vec<String> {
+    // The index displays the 3 most recent blogs.
+    let blogs = &blogs[0..3];
 
-        Pages {
-            page_list: vec![],
-            blogs,
-            renderer,
-        }
+    let mut blogs_arg = String::new();
+    for blog in blogs {
+        let blurb = blog_to_blurb(blog, r);
+        blogs_arg.push_str(&blurb);
     }
 
-    pub fn generate_index(&mut self) -> Result<()> {
-        let blogs = &self.blogs[0..3];
+    let mut args: HashMap<&str, String> = HashMap::new();
+    args.insert("latest_posts", blogs_arg);
 
-        let mut blogs_arg = String::new();
-        for blog in blogs {
-            let blurb = self.blog_to_blurb(blog)?;
-            blogs_arg.push_str(&blurb);
-        }
+    let contents = r.render_layout("index", &args).unwrap();
+    let mut f = File::create("./generated/index.html").unwrap();
+    f.write_all(contents.as_bytes()).unwrap();
 
-        let mut args: HashMap<&str, String> = HashMap::new();
-        args.insert("latest_posts", blogs_arg);
+    vec![String::from("https://jamesholdren.com")]
+}
 
-        let contents = self.renderer.render_layout("index", &args)?;
-        let mut f = File::create("./generated/index.html")?;
-        f.write_all(contents.as_bytes())?;
+fn generate_all_posts(blogs: &Vec<Blog>, r: &layout::Renderer) -> Vec<String> {
+    let mut generated_pages = vec![];
 
-        // Add the page for the sitelist
-        // TODO: Don't hardcode this? eh idk
-        self.page_list.push("https://jamesholdren.com".to_string());
-
-        Ok(())
+    let mut blogs_arg = String::new();
+    for blog in blogs {
+        let blurb = blog_to_blurb(blog, r);
+        blogs_arg.push_str(&blurb);
     }
 
-    pub fn generate_all_posts(&mut self) -> Result<()> {
-        let mut blogs_arg = String::new();
-        for blog in &self.blogs {
-            let blurb = self.blog_to_blurb(blog)?;
-            blogs_arg.push_str(&blurb);
-        }
+    let contents = r
+        .render_layout(
+            "all_posts",
+            &hashmap! {
+                "posts" => blogs_arg,
+                "posts_selected" => String::from("true"),
+            },
+        )
+        .expect("rendering all posts layout");
+    std::fs::create_dir_all("./generated/posts").expect("creating posts directory");
+    let mut f = File::create("./generated/posts/index.html").expect("creating /posts/index.html");
+    f.write_all(contents.as_bytes())
+        .expect("writing bytes to /posts/index.html");
+    generated_pages.push("https://jamesholdren.com/posts/".to_string());
 
-        let contents = self
-            .renderer
+    // For each blog post, generate its page
+    for blog in blogs.iter().filter(|blog| blog.external.is_none()) {
+        let contents = r
             .render_layout(
-                "all_posts",
-                &hashmap! {
-                    "posts" => blogs_arg,
-                    "posts_selected" => String::from("true"),
-                },
-            )
-            .context("issue replacing placeholders on all blogs page")?;
-        std::fs::create_dir_all("./generated/posts")?;
-        let mut f = File::create("./generated/posts/index.html")?;
-        f.write_all(contents.as_bytes())?;
-
-        // Add page to sitemap
-        self.page_list
-            .push("https://jamesholdren.com/posts/".to_string());
-
-        // For each blog post, generate its page
-        for blog in self.blogs.iter().filter(|blog| blog.external.is_none()) {
-            let contents = self.renderer.render_layout(
                 "post",
                 &hashmap! {
                     "title" => blog.title.to_owned(),
@@ -97,45 +97,43 @@ impl Pages {
                     "publish_date" => blog.display_date.to_owned(),
                     "contents" => blog.html.to_owned(),
                 },
-            )?;
-            std::fs::create_dir_all(format!("./generated/posts/{}/", blog.slug))?;
-            let mut f = File::create(format!("./generated/posts/{}/index.html", blog.slug))?;
-            f.write_all(contents.as_bytes())?;
+            )
+            .unwrap();
+        std::fs::create_dir_all(format!("./generated/posts/{}/", blog.slug)).unwrap();
+        let mut f = File::create(format!("./generated/posts/{}/index.html", blog.slug)).unwrap();
+        f.write_all(contents.as_bytes()).unwrap();
 
-            // Add the post to the sitemap
-            self.page_list
-                .push(format!("https://jamesholdren.com/posts/{}/", blog.slug));
-        }
-
-        Ok(())
+        // Add the post to the sitemap
+        generated_pages.push(format!("https://jamesholdren.com/posts/{}/", blog.slug));
     }
 
-    // Converts a blog post to a short excerpt string
-    fn blog_to_blurb(&self, b: &Blog) -> Result<String> {
-        // Use the external link or slug it out
-        let link = b
-            .external
-            .to_owned()
-            .unwrap_or(format!("/posts/{}/", b.slug));
+    generated_pages
+}
 
-        self.renderer.render_layout(
-            "blurb",
-            &hashmap! {
-                "title" => b.title.to_owned(),
-                "excerpt" => b.excerpt.to_owned(),
-                "publish_date" => b.display_date.to_owned(),
-                "link" => link,
-            },
-        )
-    }
+// Converts a blog post to a short excerpt string
+fn blog_to_blurb(b: &Blog, r: &layout::Renderer) -> String {
+    // Use the external link or slug it out
+    let link = b
+        .external
+        .to_owned()
+        .unwrap_or(format!("/posts/{}/", b.slug));
 
-    // Takes the page_list and turns it into a text sitemap
-    pub fn generate_sitemap(&self) -> Result<()> {
-        let mut f = File::create("./generated/sitemap.txt")?;
-        for page in &self.page_list {
-            writeln!(f, "{page}")?;
-        }
+    r.render_layout(
+        "blurb",
+        &hashmap! {
+            "title" => b.title.to_owned(),
+            "excerpt" => b.excerpt.to_owned(),
+            "publish_date" => b.display_date.to_owned(),
+            "link" => link,
+        },
+    )
+    .unwrap()
+}
 
-        Ok(())
+// Takes the page_list and turns it into a text sitemap
+fn generate_sitemap(page_list: Vec<String>) {
+    let mut f = File::create("./generated/sitemap.txt").unwrap();
+    for page in &page_list {
+        writeln!(f, "{page}").unwrap();
     }
 }
