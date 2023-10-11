@@ -1,0 +1,227 @@
+<!DOCTYPE HTML>
+<html lang="en">
+
+<head>
+  <title>Everything You Never Wanted to Know About Go Errors</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="description" content="{{description}}">
+	<link rel="stylesheet" href="/static/css/main.css">
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
+</head>
+
+<body>
+	<header class="with-gutter">
+	<nav class="menu">	
+    <div class="name"><a href="/">James Holdren</a></div>
+    <div class="link "><a href="/posts/">All Posts</a></div>
+	</nav>
+</header>
+
+
+  <div class="post with-gutter">
+    <div class="publish-date">July 31, 2023</div>
+    <h1 class="post-title">Everything You Never Wanted to Know About Go Errors</h1>
+
+    <p>What’s there to say about Go’s error handling?
+Can’t we just</p>
+<pre style="background-color:#2d2d2d;">
+<span style="color:#cc99cc;">if</span><span style="color:#d3d0c8;"> err != </span><span style="color:#f99157;">nil </span><span style="color:#d3d0c8;">{
+</span><span style="color:#d3d0c8;">    </span><span style="color:#cc99cc;">return</span><span style="color:#d3d0c8;"> err
+</span><span style="color:#d3d0c8;">}
+</span></pre>
+<p>and call it a day?
+And for many outsiders to the language, that bit of meme might be the only exposure
+they’ve had.
+But over the years, it has gotten a bit more robust, in its own way with its own
+idioms.</p>
+<p>What follows is close to a brain dump of everything I know/think about Go’s error handling.
+Meaning: this is certainly less of a technical resource, but hopefully my years of trying
+to work with it results in some insight.
+Unfortuntely, to best understand Go’s version of errors, I think we have to look at
+how it was first introduced and the history up til now.</p>
+<h1>The built-in <code>error</code> interface</h1>
+<p>Go did not always have <code>error</code>.
+Prior to the Go 1 release, it had a concept of errors, but no unified interface for them.
+Back in 2011, the <code>os</code> package defined its own <code>Error</code> interface:</p>
+<pre style="background-color:#2d2d2d;">
+<span style="color:#cc99cc;">package</span><span style="color:#d3d0c8;"> os
+</span><span style="color:#d3d0c8;">
+</span><span style="color:#747369;">// An Error can represent any printable error condition.
+</span><span style="color:#cc99cc;">type </span><span style="color:#d3d0c8;">Error </span><span style="color:#cc99cc;">interface</span><span style="color:#d3d0c8;"> {
+</span><span style="color:#d3d0c8;">	</span><span style="color:#6699cc;">String</span><span style="color:#d3d0c8;">() </span><span style="color:#cc99cc;">string
+</span><span style="color:#d3d0c8;">}
+</span><span style="color:#d3d0c8;">
+</span><span style="color:#747369;">// PathError records an error and the operation and file path that caused it.
+</span><span style="color:#cc99cc;">type </span><span style="color:#d3d0c8;">PathError </span><span style="color:#cc99cc;">struct </span><span style="color:#d3d0c8;">{
+</span><span style="color:#d3d0c8;">	</span><span style="color:#f2777a;">Op    </span><span style="color:#cc99cc;">string
+</span><span style="color:#d3d0c8;">	</span><span style="color:#f2777a;">Path  </span><span style="color:#cc99cc;">string
+</span><span style="color:#d3d0c8;">	</span><span style="color:#f2777a;">Error</span><span style="color:#d3d0c8;"> Error
+</span><span style="color:#d3d0c8;">}
+</span><span style="color:#d3d0c8;">
+</span><span style="color:#cc99cc;">func </span><span style="color:#d3d0c8;">(</span><span style="color:#f2777a;">e </span><span style="color:#d3d0c8;">*PathError) </span><span style="color:#6699cc;">String</span><span style="color:#d3d0c8;">() </span><span style="color:#cc99cc;">string </span><span style="color:#d3d0c8;">{ </span><span style="color:#cc99cc;">return</span><span style="color:#d3d0c8;"> e.</span><span style="color:#f2777a;">Op </span><span style="color:#d3d0c8;">+ &quot; &quot; + e.</span><span style="color:#f2777a;">Path </span><span style="color:#d3d0c8;">+ &quot;</span><span style="color:#99cc99;">: </span><span style="color:#d3d0c8;">&quot; + e.</span><span style="color:#f2777a;">Error</span><span style="color:#d3d0c8;">.</span><span style="color:#6699cc;">String</span><span style="color:#d3d0c8;">() }
+</span></pre>
+<p>And functions returned this interface with signatures like these:</p>
+<pre style="background-color:#2d2d2d;">
+<span style="color:#cc99cc;">func </span><span style="color:#d3d0c8;">(</span><span style="color:#f2777a;">p </span><span style="color:#d3d0c8;">*Process) </span><span style="color:#6699cc;">Wait</span><span style="color:#d3d0c8;">(</span><span style="color:#f2777a;">options </span><span style="color:#cc99cc;">int</span><span style="color:#d3d0c8;">) (w *Waitmsg, err Error) {
+</span><span style="color:#d3d0c8;">    </span><span style="color:#747369;">// Omitted...
+</span><span style="color:#d3d0c8;">}
+</span><span style="color:#d3d0c8;">
+</span><span style="color:#cc99cc;">func </span><span style="color:#d3d0c8;">(</span><span style="color:#f2777a;">p </span><span style="color:#d3d0c8;">*Process) </span><span style="color:#6699cc;">Signal</span><span style="color:#d3d0c8;">(</span><span style="color:#f2777a;">sig</span><span style="color:#d3d0c8;"> Signal) Error {
+</span><span style="color:#d3d0c8;">    </span><span style="color:#747369;">// Omitted...
+</span><span style="color:#d3d0c8;">}
+</span></pre>
+<p>Not too far off from what you see today, huh?
+More interestingly, it seems the rest of the go standard lib used this interface as well,
+even if wasn’t a particularly <code>os</code>-adjacent package:</p>
+<pre style="background-color:#2d2d2d;">
+<span style="color:#cc99cc;">func </span><span style="color:#6699cc;">Scanf</span><span style="color:#d3d0c8;">(</span><span style="color:#f2777a;">format </span><span style="color:#cc99cc;">string</span><span style="color:#d3d0c8;">, </span><span style="color:#f2777a;">a</span><span style="color:#d3d0c8;"> ...</span><span style="color:#cc99cc;">interface</span><span style="color:#d3d0c8;">{}) (n </span><span style="color:#cc99cc;">int</span><span style="color:#d3d0c8;">, err os.Error) {
+</span><span style="color:#d3d0c8;">	</span><span style="color:#747369;">// Omitted...
+</span><span style="color:#d3d0c8;">}
+</span></pre>
+<p>Finally, in <a href="https://go.dev/doc/go1">Go 1’s release notes</a>, a new built-in gets a nice,
+big <a href="https://go.dev/doc/go1#error">section</a>.
+It gives a definition for the <code>error</code> interface we know and love:</p>
+<pre style="background-color:#2d2d2d;">
+<span style="color:#cc99cc;">type </span><span style="color:#d3d0c8;">error </span><span style="color:#cc99cc;">interface</span><span style="color:#d3d0c8;"> {
+</span><span style="color:#d3d0c8;">    </span><span style="color:#6699cc;">Error</span><span style="color:#d3d0c8;">() </span><span style="color:#cc99cc;">string
+</span><span style="color:#d3d0c8;">}
+</span></pre>
+<p>It’s pretty close to what was in the <code>os</code> package, and there’s another section that mentions
+how this replaces that type and its effect on every other dependent package.
+To use it, take advantage of duck-typing, and implement <code>Error() string</code> on whatever error type you have.</p>
+<p>Okay, so we’ve got an interface! It’s now built-in and official!
+But let’s say we just called a function that returns a value and an <code>error</code>.
+So how are we using it?</p>
+<h2>Just return it</h2>
+<p>Mentioned at the very beginning, the prevalent recourse here was to just return it and 
+exit our current function:</p>
+<pre style="background-color:#2d2d2d;">
+<span style="color:#f2777a;">rune</span><span style="color:#d3d0c8;">, </span><span style="color:#f2777a;">err </span><span style="color:#d3d0c8;">:= reader.</span><span style="color:#6699cc;">ReadRune</span><span style="color:#d3d0c8;">()
+</span><span style="color:#cc99cc;">if</span><span style="color:#d3d0c8;"> err != </span><span style="color:#f99157;">nil </span><span style="color:#d3d0c8;">{
+</span><span style="color:#d3d0c8;">    </span><span style="color:#747369;">// Something bad happened, just exit
+</span><span style="color:#d3d0c8;">    </span><span style="color:#cc99cc;">return</span><span style="color:#d3d0c8;"> err
+</span><span style="color:#d3d0c8;">}
+</span></pre>
+<p>And then up above, where we decide to terminate our program because of the error,
+you could do a number of things, but most look like this:</p>
+<pre style="background-color:#2d2d2d;">
+<span style="color:#f2777a;">val</span><span style="color:#d3d0c8;">, </span><span style="color:#f2777a;">err </span><span style="color:#d3d0c8;">:= </span><span style="color:#6699cc;">myFunction</span><span style="color:#d3d0c8;">()
+</span><span style="color:#cc99cc;">if</span><span style="color:#d3d0c8;"> err != </span><span style="color:#f99157;">nil </span><span style="color:#d3d0c8;">{
+</span><span style="color:#d3d0c8;">    </span><span style="color:#66cccc;">panic</span><span style="color:#d3d0c8;">(err.</span><span style="color:#6699cc;">Error</span><span style="color:#d3d0c8;">())
+</span><span style="color:#d3d0c8;">}
+</span></pre>
+<p>Or <code>log.Fatal</code> or <code>fmt.Println</code> and <code>exit</code>, take your pick.
+But what if we wanted to handle it a bit more, instead of just bubbling up to <code>main</code>?</p>
+<h2>Check for <code>Sentinel</code> errors</h2>
+<p>I’m stealing some terminolgy from Dave Cheney here, and his <a href="https://dave.cheney.net/2016/04/27/dont-just-check-errors-handle-them-gracefully">presentation/article</a>
+on gracefully handling errors.
+The idea of a <em>sentinel</em> error is that there’s some <em>static</em> value in a package that signifies
+what error was just returned.
+For example, in the <code>io</code> package defines one:</p>
+<pre style="background-color:#2d2d2d;">
+<span style="color:#747369;">// EOF is the error returned by Read when no more input is available.
+</span><span style="color:#747369;">// Functions should return EOF only to signal a graceful end of input.
+</span><span style="color:#747369;">// If the EOF occurs unexpectedly in a structured data stream,
+</span><span style="color:#747369;">// the appropriate error is either ErrUnexpectedEOF or some other error
+</span><span style="color:#747369;">// giving more detail.
+</span><span style="color:#cc99cc;">var </span><span style="color:#f2777a;">EOF </span><span style="color:#d3d0c8;">= errors.</span><span style="color:#6699cc;">New</span><span style="color:#d3d0c8;">(&quot;</span><span style="color:#99cc99;">EOF</span><span style="color:#d3d0c8;">&quot;)
+</span></pre>
+<p>Unforunately, we have to use <code>var</code> here instead of <code>const</code>, but it’s heavily implied your shouldn’t change this value.
+Another note is that this error is constructed with <code>errors.New</code>, which returns a type that implements
+<code>error</code> backed by a string you give it.</p>
+<p>Using this error would mean checking for equality when we’re handling it:</p>
+<pre style="background-color:#2d2d2d;">
+<span style="color:#f2777a;">rune</span><span style="color:#d3d0c8;">, </span><span style="color:#f2777a;">err </span><span style="color:#d3d0c8;">:= reader.</span><span style="color:#6699cc;">ReadRune</span><span style="color:#d3d0c8;">()
+</span><span style="color:#cc99cc;">if</span><span style="color:#d3d0c8;"> err == io.</span><span style="color:#f2777a;">EOF </span><span style="color:#d3d0c8;">{
+</span><span style="color:#d3d0c8;">    </span><span style="color:#747369;">// This is an OK error! We just ran out of stuff to process
+</span><span style="color:#d3d0c8;">    </span><span style="color:#cc99cc;">return</span><span style="color:#d3d0c8;"> s, </span><span style="color:#f99157;">nil
+</span><span style="color:#d3d0c8;">}
+</span><span style="color:#cc99cc;">if</span><span style="color:#d3d0c8;"> err != </span><span style="color:#f99157;">nil </span><span style="color:#d3d0c8;">{
+</span><span style="color:#d3d0c8;">    </span><span style="color:#747369;">// Something bad happened, just exit
+</span><span style="color:#d3d0c8;">    </span><span style="color:#cc99cc;">return </span><span style="color:#d3d0c8;">&quot;&quot;, err
+</span><span style="color:#d3d0c8;">}
+</span></pre>
+<p>Now functions can kinda tell each other what happened and we change behavior based on it.
+But, this relies on the error being returned exactly the reference to the error defined.
+So what about a more detailed error, something more complicated?</p>
+<h2>Type casting</h2>
+<p>Not all errors are backed by a single string, and they have fields that vary.
+For example, this one:</p>
+<pre style="background-color:#2d2d2d;">
+<span style="color:#747369;">// A ParseError represents a malformed text string and the type of string that was expected.
+</span><span style="color:#cc99cc;">type </span><span style="color:#d3d0c8;">ParseError </span><span style="color:#cc99cc;">struct </span><span style="color:#d3d0c8;">{
+</span><span style="color:#d3d0c8;">	</span><span style="color:#f2777a;">Type </span><span style="color:#cc99cc;">string
+</span><span style="color:#d3d0c8;">	</span><span style="color:#f2777a;">Text </span><span style="color:#cc99cc;">string
+</span><span style="color:#d3d0c8;">}
+</span><span style="color:#d3d0c8;">
+</span><span style="color:#cc99cc;">func </span><span style="color:#d3d0c8;">(</span><span style="color:#f2777a;">e </span><span style="color:#d3d0c8;">*ParseError) </span><span style="color:#6699cc;">Error</span><span style="color:#d3d0c8;">() </span><span style="color:#cc99cc;">string </span><span style="color:#d3d0c8;">{
+</span><span style="color:#d3d0c8;">	</span><span style="color:#cc99cc;">return </span><span style="color:#d3d0c8;">&quot;</span><span style="color:#99cc99;">invalid </span><span style="color:#d3d0c8;">&quot; + e.</span><span style="color:#f2777a;">Type </span><span style="color:#d3d0c8;">+ &quot;</span><span style="color:#99cc99;">: </span><span style="color:#d3d0c8;">&quot; + e.</span><span style="color:#f2777a;">Text
+</span><span style="color:#d3d0c8;">}
+</span></pre>
+<p>It’s belongs to the <code>net</code> package in <code>ip.go</code>, and I’ll note that error structs seem to be the exception,
+rather than the rule, in the early Go std lib.
+It has a few fields that describe different parts of what went wrong, specifically a <code>Type</code>, which might tell
+us a bit more about what happened, and a <code>Text</code>, which tells us the piece that went wrong.
+And attached to it is a func that makes this type a valid implementation of <code>error</code>.</p>
+<p>Go doesn’t give us too many tools to handle this, but assuming we wanted to deal with the innards of this error,
+we’d have to do the following:</p>
+<pre style="background-color:#2d2d2d;">
+<span style="color:#f2777a;">val</span><span style="color:#d3d0c8;">, </span><span style="color:#f2777a;">err </span><span style="color:#d3d0c8;">:= </span><span style="color:#6699cc;">someFunc</span><span style="color:#d3d0c8;">()
+</span><span style="color:#cc99cc;">if </span><span style="color:#f2777a;">parseErr</span><span style="color:#d3d0c8;">, </span><span style="color:#f2777a;">ok </span><span style="color:#d3d0c8;">:= err.(*ParseError) {
+</span><span style="color:#d3d0c8;">    </span><span style="color:#cc99cc;">if</span><span style="color:#d3d0c8;"> parseErr.</span><span style="color:#f2777a;">Type </span><span style="color:#d3d0c8;">= &quot;</span><span style="color:#99cc99;">someType</span><span style="color:#d3d0c8;">&quot; {
+</span><span style="color:#d3d0c8;">        </span><span style="color:#747369;">// Do a thing because of the type
+</span><span style="color:#d3d0c8;">    } 
+</span><span style="color:#d3d0c8;">}
+</span><span style="color:#cc99cc;">if</span><span style="color:#d3d0c8;"> err != </span><span style="color:#f99157;">nil </span><span style="color:#d3d0c8;">{
+</span><span style="color:#d3d0c8;">    </span><span style="color:#747369;">// Can&#39;t handle this, bubble up
+</span><span style="color:#d3d0c8;">    </span><span style="color:#cc99cc;">return</span><span style="color:#d3d0c8;"> err
+</span><span style="color:#d3d0c8;">}
+</span></pre>
+<p>Cheney has a bunch of remarks on how this affects the API of your package and architecture between them,
+but the one thing I’ll point out is that we have to <em>know</em> what errors to check for.
+Not a huge problem, and not to get ahead of myself, but it’s still an issue, and something to keep in mind.
+Everyday useage of this might include casting an <code>error</code> to a <code>mysql.Error</code> so that you can read the error code
+and due something because of it, e.g. returning a conflict status when we’ve tripped a unique constraint in
+our database.</p>
+<h2>String checking</h2>
+<p>I do not condone this method at all, use at your own risk.
+Furthermore, if you’re having to do this, I suggest reworking the code so you don’t have to.</p>
+<p>For our final method, it involves comparing the <code>Error()</code> string that every <code>error</code> has.
+It might look something like this:</p>
+<pre style="background-color:#2d2d2d;">
+<span style="color:#f2777a;">val</span><span style="color:#d3d0c8;">, </span><span style="color:#f2777a;">err </span><span style="color:#d3d0c8;">:= </span><span style="color:#6699cc;">someFunc</span><span style="color:#d3d0c8;">()
+</span><span style="color:#cc99cc;">if</span><span style="color:#d3d0c8;"> err != </span><span style="color:#f99157;">nil </span><span style="color:#d3d0c8;">&amp;&amp; strings.</span><span style="color:#6699cc;">Contains</span><span style="color:#d3d0c8;">(err.</span><span style="color:#6699cc;">Error</span><span style="color:#d3d0c8;">(), &quot;</span><span style="color:#99cc99;">CONFLCIT</span><span style="color:#d3d0c8;">&quot;) {
+</span><span style="color:#d3d0c8;">    </span><span style="color:#747369;">// Hey we got a conflict, do something about it
+</span><span style="color:#d3d0c8;">}
+</span></pre>
+<p>But please don’t do it.
+Among a long list of reasons, maybe the best one is that you know <em>WAY</em> too much
+about the innards of the error and it’s likely to change, making this flaky as all hell.</p>
+<h1>Go 1.13</h1>
+<p>I know we started with Go 1, and now the heading reads Go 1.13, but not much happens with error handling
+in the (7) years between releases in terms of errors.
+Sure, a bunch of packages got new error types and changed their API’s with regards to what errors they emitted,
+but nothing particularly of note to the average Go user.</p>
+<p>(Movie announcer voice) <em>but then</em>… a </p>
+
+  </div>
+
+  <footer>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-W55GV9RJ5M"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-W55GV9RJ5M');
+  </script>
+</footer>
+
+</body>
+
+</html>
+
